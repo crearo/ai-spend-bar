@@ -16,6 +16,9 @@ BIN="$(cd app && swift build -c release --arch arm64 --arch x86_64 --show-bin-pa
 rm -rf "$APP" "$ZIP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/AIUsageBar"
+# App icon ({$} on mint). Regenerate with: swift design/icon/render.swift
+mkdir -p "$APP/Contents/Resources"
+cp app/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -25,6 +28,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>AI Usage Bar</string>
   <key>CFBundleDisplayName</key><string>AI Usage Bar</string>
   <key>CFBundleExecutable</key><string>AIUsageBar</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>

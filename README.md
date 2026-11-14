@@ -27,4 +27,4 @@ npx ai-spend-bar uninstall
 
 Shows the API value of your usage today, this week or this month across Claude Code, Codex and the other tools [ccusage](https://github.com/ryoppippi/ccusage) supports; toggle tools in the panel. Requires macOS 13+ and Node.js (the installer sets up Node for you).
 
-[Watch the demo](https://youtube.com/shorts/dT2NoWe50r4?feature=share)
+[Watch the 20-second demo](https://youtu.be/Z_sH5Z3PNxg)

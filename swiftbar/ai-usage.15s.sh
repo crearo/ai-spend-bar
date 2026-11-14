@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # <xbar.title>AI Usage</xbar.title>
-# <xbar.version>20261114.1</xbar.version>
+# <xbar.version>20261114.2</xbar.version>
 # <xbar.author>local</xbar.author>
 # <xbar.desc>AI Usage Bar is now a Mac app. This stub points you to it.</xbar.desc>
 

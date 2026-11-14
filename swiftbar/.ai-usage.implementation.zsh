@@ -1,15 +1,16 @@
 #!/bin/zsh
 
 # <xbar.title>AI Usage</xbar.title>
-# <xbar.version>v1.3.0</xbar.version>
+# <xbar.version>v1.4.0</xbar.version>
 # <xbar.author>local</xbar.author>
-# <xbar.desc>Shows today's Claude/Codex usage in the macOS menu bar.</xbar.desc>
+# <xbar.desc>Shows daily AI spend (Claude/Codex via ccusage) in the macOS menu bar.</xbar.desc>
 # <xbar.dependencies>ccusage,node</xbar.dependencies>
 # <swiftbar.refreshOnOpen>true</swiftbar.refreshOnOpen>
 
 # Hidden implementation file: SwiftBar should expose only ai-usage.15s.sh as the menu item.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
+impl_path="${0:A}"
 script_path="${USAGE_COUNTER_WRAPPER_PATH:-${0:A}}"
 plugin_dir="${0:A:h}"
 repo_root="${plugin_dir:h}"
@@ -22,6 +23,7 @@ mode="both"
 range="today"
 reset_hour="0"
 refresh_seconds="60"
+do_refresh=0
 claude_config_dir=""
 claude_config_dir_set=0
 
@@ -68,8 +70,65 @@ write_config() {
   } > "$config_file"
 }
 
-clear_cache() {
-  rm -f "$cache_output_file" "$cache_meta_file" "$stderr_dir/payload.json"
+
+lock_dir="$stderr_dir/refresh.lock"
+login_helper="$plugin_dir/.ai-usage-login.zsh"
+# SwiftBar's plugin name is the filename up to the first dot ("ai-usage").
+plugin_name="${${script_path:t}%%.*}"
+
+# Keep the cached menu visible (old numbers + "Refreshing…") instead of
+# blanking it: just flag it stale so the next run refreshes in the background.
+mark_stale() {
+  [[ -f "$cache_meta_file" ]] || return
+  grep -v '^STALE=' "$cache_meta_file" > "$cache_meta_file.$$" 2>/dev/null
+  echo "STALE=1" >> "$cache_meta_file.$$"
+  mv -f "$cache_meta_file.$$" "$cache_meta_file"
+}
+
+# A refresh is running if the lock dir exists, its pid is alive, and it is
+# younger than ~180s (anything older is a wedged/dead job).
+refresh_running() {
+  [[ -d "$lock_dir" ]] || return 1
+  local pid="" mtime now_s
+  [[ -f "$lock_dir/pid" ]] && pid="$(<"$lock_dir/pid")"
+  zmodload -F zsh/stat b:zstat 2>/dev/null
+  mtime="$(zstat +mtime "$lock_dir" 2>/dev/null)" || mtime=0
+  now_s="$EPOCHSECONDS"
+  if (( now_s - mtime > 180 )); then
+    return 1
+  fi
+  [[ -z "$pid" ]] && return 0   # just created, pid not written yet
+  kill -0 "$pid" 2>/dev/null
+}
+
+acquire_lock() {
+  mkdir -p "$stderr_dir"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    refresh_running && return 1
+    rm -rf "$lock_dir"
+    mkdir "$lock_dir" 2>/dev/null || return 1
+  fi
+  print -r -- "$$" > "$lock_dir/pid"
+  return 0
+}
+
+release_lock() {
+  [[ -f "$lock_dir/pid" && "$(<"$lock_dir/pid")" == "$$" ]] && rm -rf "$lock_dir"
+}
+
+start_refresh_bg() {
+  refresh_running && return 1
+  mkdir -p "$stderr_dir"
+  USAGE_COUNTER_WRAPPER_PATH="$script_path" \
+    nohup /bin/zsh "$impl_path" refresh-bg >/dev/null 2>"$stderr_dir/refresh.err" </dev/null &!
+  return 0
+}
+
+notify() {
+  # Message is passed as argv (not interpolated into AppleScript source).
+  osascript -e 'on run argv
+    display notification (item 1 of argv) with title "AI Usage"
+  end run' "$1" >/dev/null 2>&1
 }
 
 toggle_claude_config_dir() {
@@ -86,7 +145,6 @@ toggle_claude_config_dir() {
   fi
   claude_config_dir="${(j:,:)dirs}"
   write_config
-  clear_cache
 }
 
 run_git_update_bg() {
@@ -95,6 +153,28 @@ run_git_update_bg() {
   mkdir -p "$stderr_dir"
   nohup zsh "$plugin_dir/.ai-usage-git-update.zsh" "$op" "$repo_root" "$stderr_dir" "$notify_result" >/dev/null 2>&1 </dev/null &
 }
+
+# Run a command with a wall-clock timeout (returns 124 on timeout).
+run_with_timeout() {
+  local timeout_seconds="$1"; shift
+  local ticks=$(( timeout_seconds * 5 ))
+  "$@" &
+  local pid=$!
+  local waited=0
+  while kill -0 "$pid" 2>/dev/null && (( waited < ticks )); do
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    pkill -TERM -P "$pid" 2>/dev/null
+    kill "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+    return 124
+  fi
+  wait "$pid"
+}
+
+zmodload zsh/datetime 2>/dev/null
 
 read_config
 
@@ -113,128 +193,6 @@ done < <(detect_claude_config_dirs)
 # No explicit choice saved yet: default to using every detected profile.
 if (( ! claude_config_dir_set )) && (( ${#claude_config_dir_candidates} > 1 )); then
   claude_config_dir="${(j:,:)claude_config_dir_candidates}"
-fi
-
-case "$1" in
-  set-mode)
-    case "$2" in
-      claude|codex|both)
-        mode="$2"
-        write_config
-        clear_cache
-        ;;
-    esac
-    exit 0
-    ;;
-  set-range)
-    case "$2" in
-      today|week|last7|month|last30)
-        range="$2"
-        write_config
-        clear_cache
-        ;;
-    esac
-    exit 0
-    ;;
-  set-reset-hour)
-    if [[ "$2" == <-> ]] && (( $2 >= 0 && $2 <= 23 )); then
-      reset_hour="$2"
-      write_config
-      clear_cache
-    fi
-    exit 0
-    ;;
-  set-refresh-seconds)
-    case "$2" in
-      15|30|60|300)
-        refresh_seconds="$2"
-        write_config
-        clear_cache
-        ;;
-    esac
-    exit 0
-    ;;
-  force-refresh)
-    clear_cache
-    exit 0
-    ;;
-  git-pull)
-    run_git_update_bg pull true
-    clear_cache
-    exit 0
-    ;;
-  check-updates)
-    run_git_update_bg check true
-    clear_cache
-    exit 0
-    ;;
-  toggle-claude-config-dir)
-    toggle_claude_config_dir "$2"
-    exit 0
-    ;;
-esac
-
-mkdir -p "$stderr_dir"
-run_dir="$(mktemp -d "$stderr_dir/run.XXXXXX")"
-cleanup_run_dir() {
-  [[ -n "$run_dir" && -d "$run_dir" ]] && rm -rf "$run_dir"
-}
-trap cleanup_run_dir EXIT HUP INT TERM
-
-# Never do the actual git fetch here: this code runs on the same path that
-# draws the menu bar text, so any network call here would stall the whole
-# menu bar. Instead, just read whatever a background check last found, and
-# if it's due for a refresh, kick that off detached and move on immediately.
-update_meta_file="$stderr_dir/update.meta"
-update_available="false"
-update_behind_count="0"
-
-if [[ -d "$repo_root/.git" ]]; then
-  update_last_check="0"
-  if [[ -f "$update_meta_file" ]]; then
-    while IFS='=' read -r key value; do
-      case "$key" in
-        LAST_CHECK) update_last_check="$value" ;;
-        BEHIND_COUNT) update_behind_count="$value" ;;
-      esac
-    done < "$update_meta_file"
-  fi
-  [[ "$update_last_check" == <-> ]] || update_last_check="0"
-  [[ "$update_behind_count" == <-> ]] || update_behind_count="0"
-
-  update_now="$(date +%s)"
-  if (( update_now - update_last_check >= 86400 )); then
-    # Bump the timestamp now (before the background job finishes) so rapid
-    # back-to-back polls don't each spawn their own redundant fetch.
-    {
-      echo "LAST_CHECK=$update_now"
-      echo "BEHIND_COUNT=$update_behind_count"
-    } > "$run_dir/update.meta"
-    mv -f "$run_dir/update.meta" "$update_meta_file"
-    run_git_update_bg check false
-  fi
-
-  (( update_behind_count > 0 )) && update_available="true"
-fi
-
-payload_file="$run_dir/payload.json"
-render_output_file="$run_dir/menu.out"
-cache_meta_temp="$run_dir/menu.meta"
-
-if [[ -n "$claude_config_dir" ]]; then
-  export CLAUDE_CONFIG_DIR="$claude_config_dir"
-fi
-
-ccusage_available="true"
-if command -v ccusage >/dev/null 2>&1; then
-  ccusage_cmd=(ccusage)
-elif command -v npx >/dev/null 2>&1; then
-  ccusage_cmd=(npx --yes --prefer-offline ccusage@latest)
-elif command -v bunx >/dev/null 2>&1; then
-  ccusage_cmd=(bunx ccusage@latest)
-else
-  ccusage_available="false"
-  ccusage_cmd=()
 fi
 
 date_days_ago() {
@@ -282,6 +240,12 @@ case "$range" in
     until_date="$since_date"
     range_label="Today"
 
+    # KNOWN LIMITATION: this builds Etc/GMT±N from the whole-hour part of
+    # the UTC offset, so in half/quarter-hour zones (e.g. +05:30) a non-zero
+    # reset hour is off by 30/45 min. Etc/GMT zones can't express those, and
+    # ccusage (20.0.50) only accepts IANA names for --timezone (offsets like
+    # "+01:30" are rejected) and has no hourly/per-entry JSON report to bucket
+    # exactly ourselves, so there's no clean exact fix here.
     if (( reset_hour > 0 )); then
       offset_raw="$(date +%z)"
       offset_sign="${offset_raw[1,1]}"
@@ -326,74 +290,275 @@ case "$range" in
 esac
 
 cache_key="$mode|$range|$reset_hour|$refresh_seconds|$since_date|$until_date|$timezone_name|$claude_config_dir"
-cache_key_saved=""
-cache_last_run="0"
-now="$(date +%s)"
 
-if [[ -f "$cache_meta_file" ]]; then
-  while IFS='=' read -r key value; do
-    case "$key" in
-      CACHE_KEY) cache_key_saved="$value" ;;
-      LAST_RUN) cache_last_run="$value" ;;
-    esac
-  done < "$cache_meta_file"
-fi
-
-if [[ -s "$cache_output_file" && "$cache_key_saved" == "$cache_key" && "$cache_last_run" == <-> ]]; then
-  if (( now - cache_last_run < refresh_seconds )); then
-    cat "$cache_output_file"
-    exit 0
-  fi
-fi
-
-collect_report_files() {
-  local source="$1"
-  local stdout_file="$run_dir/$source.out"
-  local stderr_file="$run_dir/$source.err"
-  local command_text="${ccusage_cmd[*]} $source daily --json --since $since_date --until $until_date ${timezone_args[*]}"
-
-  if [[ "$ccusage_available" != "true" ]]; then
-    printf "%s\n" "Missing dependency: install ccusage, Node.js/npm, or Bun." >"$stderr_file"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$source" "error" "ccusage unavailable" "$stdout_file" "$stderr_file"
-    return
-  fi
-
-  "${ccusage_cmd[@]}" "$source" daily --json --since "$since_date" --until "$until_date" "${timezone_args[@]}" >"$stdout_file" 2>"$stderr_file"
-  local exit_code=$?
-
-  local stderr_text=""
-  local stdout_text=""
-  [[ -s "$stderr_file" ]] && stderr_text="$(cat "$stderr_file")"
-  [[ -s "$stdout_file" ]] && stdout_text="$(cat "$stdout_file")"
-
-  if (( exit_code != 0 )); then
-    if printf '%s\n%s' "$stderr_text" "$stdout_text" | grep -q "No valid .* data directories found"; then
-      printf '%s\t%s\t%s\t%s\t%s\n' "$source" "missing_data" "$command_text" "$stdout_file" "$stderr_file"
-    else
-      printf '%s\t%s\t%s\t%s\t%s\n' "$source" "error" "$command_text" "$stdout_file" "$stderr_file"
-    fi
-    return
-  fi
-
-  printf '%s\t%s\t%s\t%s\t%s\n' "$source" "ok" "$command_text" "$stdout_file" "$stderr_file"
+# ---------------------------------------------------------------------------
+# Actions: change settings, keep the old menu visible, refresh in background.
+# ---------------------------------------------------------------------------
+settings_changed() {
+  write_config
+  mark_stale
+  start_refresh_bg
 }
 
-report_specs=()
-case "$mode" in
-  claude)
-    report_specs+=("$(collect_report_files claude)")
+case "$1" in
+  set-mode)
+    case "$2" in
+      claude|codex|both) mode="$2"; settings_changed ;;
+    esac
+    exit 0
     ;;
-  codex)
-    report_specs+=("$(collect_report_files codex)")
+  set-range)
+    case "$2" in
+      today|week|last7|month|last30) range="$2"; settings_changed ;;
+    esac
+    exit 0
     ;;
-  both)
-    report_specs+=("$(collect_report_files claude)")
-    report_specs+=("$(collect_report_files codex)")
+  set-reset-hour)
+    if [[ "$2" == <-> ]] && (( $2 >= 0 && $2 <= 23 )); then
+      reset_hour="$2"; settings_changed
+    fi
+    exit 0
+    ;;
+  set-refresh-seconds)
+    case "$2" in
+      15|30|60|300) refresh_seconds="$2"; settings_changed ;;
+    esac
+    exit 0
+    ;;
+  toggle-claude-config-dir)
+    toggle_claude_config_dir "$2"
+    mark_stale
+    start_refresh_bg
+    exit 0
+    ;;
+  force-refresh)
+    mark_stale
+    start_refresh_bg
+    exit 0
+    ;;
+  git-pull)
+    run_git_update_bg pull true
+    mark_stale
+    exit 0
+    ;;
+  check-updates)
+    run_git_update_bg check true
+    mark_stale
+    exit 0
+    ;;
+  login-enable)
+    if [[ -f "$login_helper" ]] && [[ "$(zsh "$login_helper" enable 2>/dev/null)" == "enabled" ]]; then
+      notify "AI Usage will now start when you log in"
+    else
+      notify "Could not set up start at login"
+    fi
+    exit 0
+    ;;
+  login-disable)
+    [[ -f "$login_helper" ]] && zsh "$login_helper" disable >/dev/null 2>&1
+    exit 0
+    ;;
+  refresh-bg)
+    do_refresh=1
     ;;
 esac
 
+mkdir -p "$stderr_dir"
+
+if (( ! do_refresh )); then
+  # -------------------------------------------------------------------------
+  # Fast path (every SwiftBar poll / click): print cache, maybe kick off a
+  # detached refresh, exit. No node, no ccusage, no network here.
+  # -------------------------------------------------------------------------
+  now="$EPOCHSECONDS"
+
+  # Never do the actual git fetch here; just read what a background check
+  # last found and, if due, kick off a detached check.
+  update_meta_file="$stderr_dir/update.meta"
+  update_available="false"
+  if [[ -d "$repo_root/.git" ]]; then
+    update_last_check="0"
+    update_behind_count="0"
+    if [[ -f "$update_meta_file" ]]; then
+      while IFS='=' read -r key value; do
+        case "$key" in
+          LAST_CHECK) update_last_check="$value" ;;
+          BEHIND_COUNT) update_behind_count="$value" ;;
+        esac
+      done < "$update_meta_file"
+    fi
+    [[ "$update_last_check" == <-> ]] || update_last_check="0"
+    [[ "$update_behind_count" == <-> ]] || update_behind_count="0"
+    if (( now - update_last_check >= 86400 )); then
+      # Bump the timestamp first so rapid polls don't each spawn a fetch.
+      {
+        echo "LAST_CHECK=$now"
+        echo "BEHIND_COUNT=$update_behind_count"
+      } > "$update_meta_file.$$"
+      mv -f "$update_meta_file.$$" "$update_meta_file"
+      run_git_update_bg check false
+    fi
+    (( update_behind_count > 0 )) && update_available="true"
+  fi
+
+  cache_key_saved=""
+  cache_last_run="0"
+  cache_stale_flag="0"
+  if [[ -f "$cache_meta_file" ]]; then
+    while IFS='=' read -r key value; do
+      case "$key" in
+        CACHE_KEY) cache_key_saved="$value" ;;
+        LAST_RUN) cache_last_run="$value" ;;
+        STALE) cache_stale_flag="$value" ;;
+      esac
+    done < "$cache_meta_file"
+  fi
+  [[ "$cache_last_run" == <-> ]] || cache_last_run="0"
+
+  have_cache=0
+  [[ -s "$cache_output_file" ]] && have_cache=1
+
+  refreshing=0
+  if refresh_running; then
+    refreshing=1
+  elif (( ! have_cache )) || [[ "$cache_key_saved" != "$cache_key" || "$cache_stale_flag" == "1" ]] \
+      || (( now - cache_last_run >= refresh_seconds )); then
+    start_refresh_bg && refreshing=1
+  fi
+
+  age_label() {
+    local s=$1
+    if (( s < 60 )); then print -r -- "${s}s"
+    elif (( s < 3600 )); then print -r -- "$((s / 60))m"
+    elif (( s < 86400 )); then print -r -- "$((s / 3600))h $((s % 3600 / 60))m"
+    else print -r -- "$((s / 86400))d"
+    fi
+  }
+
+  print_dynamic_lines() {
+    local action_base="bash=$script_path terminal=false refresh=true"
+    if (( have_cache && cache_last_run > 0 )); then
+      local status_line="Updated $(age_label $(( now - cache_last_run ))) ago"
+      (( refreshing )) && status_line+=" · Refreshing…"
+      print -r -- "$status_line | color=gray"
+    elif (( refreshing )); then
+      print -r -- "Refreshing… | color=gray"
+    fi
+    if [[ -f "$login_helper" ]]; then
+      if [[ "$(zsh "$login_helper" status 2>/dev/null)" == "enabled" ]]; then
+        print -r -- "✓ Starts at login"
+        print -r -- "--Turn off start at login | $action_base param1=login-disable"
+      else
+        print -r -- "⚠️ Won't start after restart — click to fix | $action_base param1=login-enable"
+        print -r -- "Adds a login item so the menu bar comes back after a reboot | size=11 color=gray"
+      fi
+    fi
+  }
+
+  if (( have_cache )); then
+    # Cache layout: title line, "---", body. Dynamic lines go right after "---".
+    {
+      IFS= read -r title_line
+      local_suffix=""; [[ "$update_available" == "true" ]] && local_suffix=" •"
+      print -r -- "$title_line$local_suffix"
+      IFS= read -r sep_line
+      print -r -- "---"
+      print_dynamic_lines
+      [[ "$sep_line" == "---" ]] || print -r -- "$sep_line"
+      cat
+    } < "$cache_output_file"
+  else
+    print -r -- "AI …"
+    print -r -- "---"
+    print -r -- "Loading usage…"
+    print_dynamic_lines
+  fi
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Background refresh job (hidden subcommand: refresh-bg).
+# ---------------------------------------------------------------------------
+acquire_lock || exit 0
+run_dir="$(mktemp -d "$stderr_dir/run.XXXXXX")"
+cleanup_run_dir() {
+  [[ -n "$run_dir" && -d "$run_dir" ]] && rm -rf "$run_dir"
+  release_lock
+}
+trap cleanup_run_dir EXIT
+trap 'exit 1' HUP INT TERM
+
+now="$EPOCHSECONDS"
+update_behind_count="0"
+if [[ -f "$stderr_dir/update.meta" ]]; then
+  while IFS='=' read -r key value; do
+    [[ "$key" == BEHIND_COUNT ]] && update_behind_count="$value"
+  done < "$stderr_dir/update.meta"
+fi
+[[ "$update_behind_count" == <-> ]] || update_behind_count="0"
+update_available="false"
+(( update_behind_count > 0 )) && update_available="true"
+
+render_output_file="$run_dir/menu.out"
+
+if [[ -n "$claude_config_dir" ]]; then
+  export CLAUDE_CONFIG_DIR="$claude_config_dir"
+fi
+
+# Prefer the latest ccusage (online pricing, new models); fall back to a
+# global install, then bunx. Never --prefer-offline: it pins a stale version.
+ccusage_cmds=()
+command -v npx >/dev/null 2>&1 && ccusage_cmds+=("npx --yes ccusage@latest")
+command -v ccusage >/dev/null 2>&1 && ccusage_cmds+=("ccusage")
+command -v bunx >/dev/null 2>&1 && ccusage_cmds+=("bunx ccusage@latest")
+ccusage_timeout=60
+
+# Writes "<source>\t<status>\t<command>\t<stdout>\t<stderr>" to $run_dir/<source>.spec
+collect_report() {
+  local source="$1"
+  local stdout_file="$run_dir/$source.out"
+  local stderr_file="$run_dir/$source.err"
+  local spec_file="$run_dir/$source.spec"
+  local rstatus="error" command_text="ccusage unavailable" cmd_str
+  local -a cmd
+
+  if (( ${#ccusage_cmds} == 0 )); then
+    print -r -- "Missing dependency: install Node.js/npm (for npx), ccusage, or Bun." >"$stderr_file"
+  fi
+
+  for cmd_str in "${ccusage_cmds[@]}"; do
+    cmd=(${(z)cmd_str} "$source" daily --json --since "$since_date" --until "$until_date" "${timezone_args[@]}")
+    command_text="${cmd[*]}"
+    run_with_timeout "$ccusage_timeout" "${cmd[@]}" >"$stdout_file" 2>"$stderr_file" </dev/null
+    local exit_code=$?
+    if (( exit_code == 0 )); then
+      rstatus="ok"; break
+    fi
+    if cat "$stderr_file" "$stdout_file" 2>/dev/null | grep -q "No valid .* data directories found"; then
+      rstatus="missing_data"; break
+    fi
+    (( exit_code == 124 )) && print -r -- "Timed out after ${ccusage_timeout}s: $command_text" >>"$stderr_file"
+    rstatus="error"
+  done
+  printf '%s\t%s\t%s\t%s\t%s\n' "$source" "$rstatus" "$command_text" "$stdout_file" "$stderr_file" > "$spec_file"
+}
+
+jobs_pids=()
+case "$mode" in
+  claude) collect_report claude & jobs_pids+=($!) ;;
+  codex)  collect_report codex & jobs_pids+=($!) ;;
+  both)   collect_report claude & jobs_pids+=($!); collect_report codex & jobs_pids+=($!) ;;
+esac
+for pid in "${jobs_pids[@]}"; do wait "$pid"; done
+
+report_specs=()
+for spec_file in "$run_dir"/*.spec(N); do
+  report_specs+=("$(<"$spec_file")")
+done
+# Keep Claude before Codex regardless of glob order.
+report_specs=(${(M)report_specs:#claude*} ${(M)report_specs:#codex*})
+
 REPORT_SPECS="${(F)report_specs}" \
-PAYLOAD_FILE="$payload_file" \
 MODE="$mode" \
 RANGE="$range" \
 RANGE_LABEL="$range_label" \
@@ -411,9 +576,18 @@ CLAUDE_CONFIG_DIR_CANDIDATES="${(F)claude_config_dir_candidates}" \
 HOME_DIR="$HOME" \
 UPDATE_AVAILABLE="$update_available" \
 UPDATE_BEHIND_COUNT="$update_behind_count" \
-/usr/bin/env node <<'NODE_PAYLOAD'
+/usr/bin/env node <<'NODE_RENDER' > "$render_output_file"
 const fs = require("fs");
 
+function readMaybe(path) {
+  try {
+    return path && fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
+  } catch {
+    return "";
+  }
+}
+
+// Single node process: build the payload straight from env + report files.
 const payload = {
   mode: process.env.MODE || "both",
   range: process.env.RANGE || "today",
@@ -438,25 +612,13 @@ const payload = {
   reports: [],
 };
 
-function readMaybe(path) {
-  if (!path || !fs.existsSync(path)) return "";
-  return fs.readFileSync(path, "utf8");
-}
-
-for (const spec of process.env.REPORT_SPECS ? process.env.REPORT_SPECS.split("\n") : []) {
+for (const spec of (process.env.REPORT_SPECS || "").split("\n")) {
   if (!spec.trim()) continue;
   const [source, status, command, stdoutPath, stderrPath] = spec.split("\t");
-  const stdout = readMaybe(stdoutPath);
-  const stderr = readMaybe(stderrPath);
-  payload.reports.push({ source, status, command, stdout, stderr });
+  payload.reports.push({ source, status, command, stdout: readMaybe(stdoutPath), stderr: readMaybe(stderrPath) });
 }
 
-fs.writeFileSync(process.env.PAYLOAD_FILE, JSON.stringify(payload));
-NODE_PAYLOAD
 
-REPORT_SPECS="${(F)report_specs}" PAYLOAD_FILE="$payload_file" /usr/bin/env node <<'NODE_RENDER' > "$render_output_file"
-const fs = require("fs");
-const payload = JSON.parse(fs.readFileSync(process.env.PAYLOAD_FILE, "utf8"));
 
 const mode = payload.mode || "both";
 const range = payload.range || "today";
@@ -642,13 +804,15 @@ function action(command, value) {
   return `bash=${scriptPath} param1=${command} param2=${value} terminal=false refresh=true`;
 }
 
+
 const reports = payload.reports.map(normalizeReport);
 const total = addReports(reports);
 const models = [...total.models].length > 0 ? [...total.models].join(", ") : "No model data";
 const resetLabel = `${String(resetHour).padStart(2, "0")}:00`;
 const hasErrors = reports.some((report) => report.status === "error");
 
-console.log(`${modeLabel()} ${money(total.cost)} ${compactNumber(total.total)}${hasErrors ? " !" : ""}${updateAvailable ? " •" : ""}`);
+// " •" (update available) is appended by the fast path, so it stays current.
+console.log(`${modeLabel()} ${money(total.cost)}${hasErrors ? " !" : ""}`);
 console.log("---");
 console.log(`Mode: ${modeLabel()}`);
 console.log(`Range: ${rangeLabel}`);
@@ -747,21 +911,23 @@ console.log(`Config: ${range} ${sinceDate}-${untilDate}`);
 NODE_RENDER
 node_exit=$?
 
-if (( node_exit == 0 )); then
-  cat "$render_output_file"
+if (( node_exit == 0 )) && [[ -s "$render_output_file" ]]; then
   mv -f "$render_output_file" "$cache_output_file"
   {
     echo "CACHE_KEY=$cache_key"
     echo "LAST_RUN=$now"
-  } > "$cache_meta_temp"
-  mv -f "$cache_meta_temp" "$cache_meta_file"
-else
-  if [[ -s "$render_output_file" ]]; then
-    cat "$render_output_file"
-  else
-    echo "AI ?"
-    echo "---"
-    echo "Could not render usage output."
-  fi
-  rm -f "$cache_meta_file"
+  } > "$run_dir/menu.meta"
+  mv -f "$run_dir/menu.meta" "$cache_meta_file"
+elif [[ ! -s "$cache_output_file" ]]; then
+  { echo "AI ?"; echo "---"; echo "Could not render usage output."; } > "$run_dir/menu.err.out"
+  mv -f "$run_dir/menu.err.out" "$cache_output_file"
+  { echo "CACHE_KEY=$cache_key"; echo "LAST_RUN=$now"; } > "$cache_meta_file"
 fi
+
+# Ask SwiftBar to redraw now. The cache is fresh, so that run just prints it
+# (no new refresh → no loop).
+release_lock
+if [[ -n "$plugin_name" ]]; then
+  open -g "swiftbar://refreshplugin?name=$plugin_name" >/dev/null 2>&1
+fi
+exit 0

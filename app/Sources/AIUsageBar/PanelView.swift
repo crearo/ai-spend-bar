@@ -9,6 +9,11 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Only ask about start at login when it isn't set up yet; it's the next thing to do, so it goes first.
+            if model.loginStatus != .enabled {
+                loginWarning
+            }
+
             if let v = model.updateAvailable {
                 Label("Update available (\(Version.display(v))) — run npx ai-usage-bar", systemImage: "arrow.down.circle")
                     .font(.caption).padding(6).frame(maxWidth: .infinity, alignment: .leading)
@@ -39,11 +44,6 @@ struct PanelView: View {
                 Text("Last refresh failed: \(e)").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
 
-            // Only ask about start at login when it isn't set up yet.
-            if model.loginStatus != .enabled {
-                Divider()
-                loginToggle
-            }
             Divider()
             footer
         }
@@ -120,23 +120,31 @@ struct PanelView: View {
         return model.lastWeek.contains { $0.key == key } ? key : nil
     }
 
-    private var loginToggle: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if model.loginStatus != .requiresApproval {
-                HStack {
-                    Text("Doesn't start at login yet").font(.callout)
-                    Spacer()
-                    Button("Start at login") { model.setStartAtLogin(true) }.controlSize(.small)
+    private var loginWarning: some View {
+        let needsApproval = model.loginStatus == .requiresApproval
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3).foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(needsApproval ? "Approve AI Usage Bar in Login Items" : "Won't start after a restart")
+                    .font(.callout.weight(.semibold))
+                Text(needsApproval
+                     ? "macOS needs your OK before it can start at login."
+                     : "Turn on start at login so it's always in your menu bar.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if needsApproval {
+                    Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
+                } else {
+                    Button("Start at login") { model.setStartAtLogin(true) }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
                 }
             }
-            if model.loginStatus == .requiresApproval {
-                HStack {
-                    Text("Needs approval in Login Items.").font(.caption).foregroundStyle(.secondary)
-                    Button("Open Settings") { SMAppService.openSystemSettingsLoginItems() }
-                        .controlSize(.small)
-                }
-            }
+            Spacer(minLength: 0)
         }
+        .padding(10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.35)))
     }
 
     private var footer: some View {

@@ -20,9 +20,11 @@ See your AI spend in your Mac's menu bar.
 npx ai-spend-bar
 ```
 
-That's it. It starts now and every time you log in. No Node? `curl -fsSL https://raw.githubusercontent.com/crearo/ai-spend-bar/main/install.sh | bash`
-
-Shows today, this week or this month across Claude Code, Codex and the other tools [ccusage](https://github.com/ryoppippi/ccusage) supports. Numbers are the API value of your usage, from local logs on this Mac.
+- that's it, starts at login
+- today, this week, this month
+- claude code, codex + 19 more (via [ccusage](https://github.com/ryoppippi/ccusage))
+- API value, from this mac's local logs
+- no node? `curl -fsSL https://raw.githubusercontent.com/crearo/ai-spend-bar/main/install.sh | bash`
 
 ## Uninstall
 

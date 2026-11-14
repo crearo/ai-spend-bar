@@ -5,6 +5,7 @@ import SwiftUI
 
 struct PanelView: View {
     @EnvironmentObject var model: UsageModel
+    @State private var selectedDay: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -38,8 +39,11 @@ struct PanelView: View {
                 Text("Last refresh failed: \(e)").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
 
-            Divider()
-            loginToggle
+            // Only ask about start at login when it isn't set up yet.
+            if model.loginStatus != .enabled {
+                Divider()
+                loginToggle
+            }
             Divider()
             footer
         }
@@ -67,32 +71,64 @@ struct PanelView: View {
     }
 
     private var chart: some View {
+        let week = model.lastWeek
         let today = UsageModel.dayKey(Date())
-        return Chart(model.lastWeek, id: \.key) { d in
-            BarMark(x: .value("Day", d.day, unit: .day), y: .value("Cost", d.cost))
-                .foregroundStyle(d.key == today ? Color.accentColor : Color.secondary.opacity(0.45))
-                .cornerRadius(3)
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { _ in
-                AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+        let focusKey = selectedDay ?? today
+        let focus = week.first { $0.key == focusKey }
+        return VStack(alignment: .leading, spacing: 4) {
+            // Hover or click a bar to see that day; defaults to today.
+            if let f = focus {
+                Text("\(f.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) · \(money(f.cost))")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
-        }
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { v in
-                AxisGridLine()
-                AxisValueLabel { if let c = v.as(Double.self) { Text("$\(Int(c))") } }
+            Chart(week, id: \.key) { d in
+                BarMark(x: .value("Day", d.day, unit: .day), y: .value("Cost", d.cost))
+                    .foregroundStyle(d.key == focusKey ? Color.accentColor : Color.secondary.opacity(0.45))
+                    .cornerRadius(3)
+                    .annotation(position: .top, spacing: 2) {
+                        if d.cost >= 0.5 {
+                            Text("$\(Int(d.cost.rounded()))").font(.system(size: 9)).foregroundStyle(.secondary)
+                        }
+                    }
             }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                }
+            }
+            .chartYAxis(.hidden)
+            .chartOverlay { proxy in
+                GeometryReader { geo in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let p): selectedDay = dayKey(at: p, proxy: proxy, geo: geo)
+                            case .ended: selectedDay = nil
+                            }
+                        }
+                        .gesture(SpatialTapGesture().onEnded { selectedDay = dayKey(at: $0.location, proxy: proxy, geo: geo) })
+                }
+            }
+            .frame(height: 100)
         }
-        .frame(height: 90)
+    }
+
+    private func dayKey(at point: CGPoint, proxy: ChartProxy, geo: GeometryProxy) -> String? {
+        let x = point.x - geo[proxy.plotAreaFrame].origin.x
+        guard let date: Date = proxy.value(atX: x) else { return nil }
+        let key = UsageModel.dayKey(date)
+        return model.lastWeek.contains { $0.key == key } ? key : nil
     }
 
     private var loginToggle: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle("Start at login", isOn: Binding(
-                get: { model.loginStatus == .enabled || model.loginStatus == .requiresApproval },
-                set: { model.setStartAtLogin($0) }
-            ))
+            if model.loginStatus != .requiresApproval {
+                HStack {
+                    Text("Doesn't start at login yet").font(.callout)
+                    Spacer()
+                    Button("Start at login") { model.setStartAtLogin(true) }.controlSize(.small)
+                }
+            }
             if model.loginStatus == .requiresApproval {
                 HStack {
                     Text("Needs approval in Login Items.").font(.caption).foregroundStyle(.secondary)

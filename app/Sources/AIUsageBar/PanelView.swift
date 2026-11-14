@@ -59,11 +59,16 @@ struct PanelView: View {
                     Text(Tools.name(tool))
                     Spacer()
                     Text(money(model.cost(tool: tool, range: model.range))).monospacedDigit()
-                        .foregroundStyle(model.excluded.contains(tool) ? .secondary : .primary)
-                    Toggle("", isOn: Binding(
-                        get: { !model.excluded.contains(tool) },
-                        set: { on in if on { model.excluded.remove(tool) } else { model.excluded.insert(tool) } }
-                    )).toggleStyle(.switch).controlSize(.mini).labelsHidden()
+                        .foregroundStyle(model.isCounted(tool) ? .primary : .secondary)
+                    // No switch for a lone tool: turning it off would just show $0.
+                    if model.tools.count > 1 {
+                        Toggle("", isOn: Binding(
+                            get: { model.isCounted(tool) },
+                            set: { on in if on { model.excluded.remove(tool) } else { model.excluded.insert(tool) } }
+                        )).toggleStyle(.switch).controlSize(.mini).labelsHidden()
+                            .disabled(!model.canToggle(tool))
+                            .help(model.canToggle(tool) ? "Count in total" : "At least one tool has to count")
+                    }
                 }
                 .font(.callout)
             }

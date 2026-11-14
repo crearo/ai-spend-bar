@@ -75,22 +75,35 @@ final class UsageModel: ObservableObject {
         return sums.filter { $0.value > 0 }.sorted { $0.value > $1.value }.map(\.key)
     }
 
+    /// Whether a tool's cost counts toward totals. A lone tool always counts, and so does
+    /// everything if every listed tool was switched off, so the total never reads $0 for no reason.
+    func isCounted(_ tool: String) -> Bool {
+        let all = tools
+        if all.count <= 1 || all.allSatisfy({ excluded.contains($0) }) { return true }
+        return !excluded.contains(tool)
+    }
+
+    private var countedCount: Int { tools.filter(isCounted).count }
+
+    /// The switch is only offered with several tools, and the last one on can't be turned off.
+    func canToggle(_ tool: String) -> Bool { tools.count > 1 && !(isCounted(tool) && countedCount == 1) }
+
     func cost(tool: String, range r: Range) -> Double {
         days(in: r).reduce(0) { $0 + (costs[$1]?[tool] ?? 0) }
     }
 
     func total(_ r: Range) -> Double {
-        days(in: r).reduce(0) { acc, day in
-            acc + (costs[day] ?? [:]).filter { !excluded.contains($0.key) }.values.reduce(0, +)
+        return days(in: r).reduce(0) { acc, day in
+            acc + (costs[day] ?? [:]).filter { isCounted($0.key) }.values.reduce(0, +)
         }
     }
 
     /// Last 7 days of enabled-tool totals, oldest first.
     var lastWeek: [(day: Date, key: String, cost: Double)] {
-        (0..<7).reversed().map { back in
+        return (0..<7).reversed().map { back in
             let d = Calendar.current.date(byAdding: .day, value: -back, to: Calendar.current.startOfDay(for: Date()))!
             let k = Self.dayKey(d)
-            return (d, k, (costs[k] ?? [:]).filter { !excluded.contains($0.key) }.values.reduce(0, +))
+            return (d, k, (costs[k] ?? [:]).filter { isCounted($0.key) }.values.reduce(0, +))
         }
     }
 

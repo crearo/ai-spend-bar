@@ -103,6 +103,10 @@ if (( UNINSTALL )); then
   step "Removing the app"
   quit_app
   if [[ -e "$APP_PATH" ]]; then run rm -rf "$APP_PATH"; else info "Already removed."; fi
+  # Settings and cache too, so a later reinstall starts fresh (and turns start at login on again).
+  info "Removing settings and cache"
+  runq defaults delete "$APP_ID"
+  run rm -rf "$HOME/Library/Caches/$APP_ID"
   step "Cleaning up the old SwiftBar version"
   migrate_swiftbar
   step "Left in place"

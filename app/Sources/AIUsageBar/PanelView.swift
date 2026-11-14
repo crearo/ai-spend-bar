@@ -10,7 +10,7 @@ struct PanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let v = model.updateAvailable {
-                Label("Update available (\(v)) — run npx ai-usage-bar", systemImage: "arrow.down.circle")
+                Label("Update available (\(Version.display(v))) — run npx ai-usage-bar", systemImage: "arrow.down.circle")
                     .font(.caption).padding(6).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             }

@@ -22,6 +22,9 @@ final class DecodeTests: XCTestCase {
         XCTAssertTrue(Version.isNewer("20261115.0.0", than: "20261114.3.0"))
         XCTAssertTrue(Version.isNewer("20261114.1.0", than: "20261114.0.9"))
         XCTAssertFalse(Version.isNewer("20261114.0.0", than: "20261114.0.0"))
+        XCTAssertTrue(Version.isNewer("20261114.2.0", than: "20261114.1"))
+        XCTAssertFalse(Version.isNewer("20261114.1.0", than: "20261114.1"))
+        XCTAssertEqual(Version.display("20261114.2.0"), "20261114.2")
         XCTAssertEqual(Tools.name("foo"), "Foo")
     }
 }

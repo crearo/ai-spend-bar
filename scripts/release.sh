@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Usage: scripts/release.sh [patch]   -> version yyyyMMdd.<patch>.0
+# Usage: scripts/release.sh [n]   -> version yyyyMMdd.n (npm form: yyyyMMdd.n.0, since npm needs 3 parts)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-v="$(date +%Y%m%d).${1:-0}.0"
-npm version "$v" --no-git-tag-version --allow-same-version >/dev/null
+v="$(date +%Y%m%d).${1:-0}"
+npm version "$v.0" --no-git-tag-version --allow-same-version >/dev/null
 sed -i '' "s|<xbar.version>[^<]*</xbar.version>|<xbar.version>$v</xbar.version>|" swiftbar/ai-usage.15s.sh
-echo "Version set to $v"
+echo "Version set to $v (npm: $v.0)"
 if [[ -x scripts/build-app.sh ]]; then scripts/build-app.sh; else echo "scripts/build-app.sh not found; skipping build"; fi
 cat <<MSG
 

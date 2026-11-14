@@ -1,9 +1,10 @@
 # Releasing
 
-Versions are date-based: `yyyyMMdd.patch.0`, e.g. `20261114.0.0`. A second release on the
-same day bumps the middle number (`20261114.1.0`).
+Versions are date-based: `yyyyMMdd.N`, e.g. `20261114.0`, then `20261114.1`, `20261114.2` for
+more releases the same day. npm only accepts three-part versions, so `package.json` carries
+`yyyyMMdd.N.0`; the app, docs and everything else show `yyyyMMdd.N`.
 
-1. `scripts/release.sh [patch]` sets the version in `package.json` and the SwiftBar stub,
+1. `scripts/release.sh [N]` sets the version in `package.json` and the SwiftBar stub,
    then builds `dist/AI-Usage-Bar.zip` with `scripts/build-app.sh`.
 2. Commit (don't push yet).
 3. `npm publish` (`prepublishOnly` rebuilds the app so the zip is always fresh), then check

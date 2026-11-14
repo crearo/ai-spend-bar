@@ -65,6 +65,11 @@ public enum Tools {
 }
 
 public enum Version {
+    /// "20261114.2.0" (npm form) -> "20261114.2" (the form people see).
+    public static func display(_ v: String) -> String {
+        v.hasSuffix(".0") && v.split(separator: ".").count == 3 ? String(v.dropLast(2)) : v
+    }
+
     /// Numeric part-by-part compare of date-based versions like 20261114.0.0.
     public static func isNewer(_ a: String, than b: String) -> Bool {
         let pa = a.split(separator: ".").map { Int($0) ?? 0 }

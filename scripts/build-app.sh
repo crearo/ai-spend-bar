@@ -3,7 +3,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-VERSION="$(node -p "require('./package.json').version")"
+NPM_VERSION="$(node -p "require('./package.json').version")"
+# Versions are yyyyMMdd.N; npm requires three parts, so package.json carries yyyyMMdd.N.0.
+VERSION="${NPM_VERSION%.0}"
 APP="$ROOT/dist/AI Usage Bar.app"
 ZIP="$ROOT/dist/AI-Usage-Bar.zip"
 

@@ -6,6 +6,7 @@
 # <xbar.desc>AI Spend Bar is now a Mac app. This stub points you to it.</xbar.desc>
 
 # Old SwiftBar installs update via git pull and land here.
+# Keep this file (and its path): deleting it makes their menu bar item vanish with no pointer to the new app.
 echo "AI ↑"
 echo "---"
 echo "AI Spend Bar is now a Mac app"

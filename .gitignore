@@ -10,3 +10,6 @@ npm-debug.log*
 
 # Built app
 dist/
+
+# /brag video output (work files are large)
+brag-output/

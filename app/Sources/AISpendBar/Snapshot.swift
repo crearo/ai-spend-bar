@@ -13,6 +13,23 @@ enum Snapshot {
             let view = SnapshotScene(label: model.menuLabel).environmentObject(model)
             write(render(view, appearance: appearance), to: dir.appendingPathComponent("panel-\(name).png"))
         }
+        // BRAG_VIDEO=1: also render 3x panel-only frames (dark) for the launch video into <dir>/video/.
+        if ProcessInfo.processInfo.environment["BRAG_VIDEO"] == "1" {
+            let out = dir.appendingPathComponent("video")
+            for range in Range.allCases {
+                for off in [false, true] {
+                    let m = UsageModel(sample: sampleCosts())
+                    m.range = range
+                    if off { m.excluded = ["gemini"] }
+                    let v = PanelCard().environmentObject(m)
+                    let file = "panel-\(range.rawValue.lowercased())\(off ? "-nogemini" : "").png"
+                    write(render(v, appearance: .darkAqua, scale: 3, clear: true), to: out.appendingPathComponent(file))
+                }
+            }
+            let label = Text(model.menuLabel).font(.system(size: 13, weight: .medium))
+                .padding(.horizontal, 8).padding(.vertical, 2)
+            write(render(label, appearance: .darkAqua, scale: 3, clear: true), to: out.appendingPathComponent("label.png"))
+        }
     }
 
     /// 35 days of plausible spend for three tools, rising toward today.
@@ -32,13 +49,14 @@ enum Snapshot {
     }
 
     /// Lays the view out in an offscreen window so native controls (switches, segmented picker) draw for real.
-    static func render<V: View>(_ view: V, appearance: NSAppearance.Name) -> NSBitmapImageRep {
+    static func render<V: View>(_ view: V, appearance: NSAppearance.Name, scale: CGFloat = 1, clear: Bool = false) -> NSBitmapImageRep {
         // Draw controls as if the window were active (blue switches, not gray).
         let host = NSHostingView(rootView: view.environment(\.controlActiveState, .key))
         host.appearance = NSAppearance(named: appearance)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 800), styleMask: .borderless,
                               backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance)
+        if clear { window.backgroundColor = .clear; window.isOpaque = false }
         window.contentView = host
         // Lay out twice so anything that changes on appear has settled before measuring.
         for _ in 0..<2 {
@@ -48,7 +66,15 @@ enum Snapshot {
             window.setContentSize(host.fittingSize)
         }
         host.layoutSubtreeIfNeeded()
-        let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+        let rep: NSBitmapImageRep
+        if scale == 1 {
+            rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+        } else {
+            rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(host.bounds.width * scale),
+                                   pixelsHigh: Int(host.bounds.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
+                                   hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            rep.size = host.bounds.size
+        }
         host.cacheDisplay(in: host.bounds, to: rep)
         return rep
     }
@@ -84,5 +110,14 @@ private struct SnapshotScene: View {
         }
         .frame(width: 520)
         .background(Color(nsColor: .underPageBackgroundColor))
+    }
+}
+
+/// The panel alone, as it looks when it drops from the menu bar (for the launch video).
+private struct PanelCard: View {
+    var body: some View {
+        PanelView()
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.12)))
     }
 }

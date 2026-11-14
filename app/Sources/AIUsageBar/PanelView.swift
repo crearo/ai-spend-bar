@@ -160,13 +160,18 @@ struct PanelView: View {
 
     private var footer: some View {
         HStack {
+            // Usage comes from this Mac's local logs only; other devices aren't included.
+            Label("This Mac only", systemImage: "laptopcomputer")
+                .help("Counts AI usage on this Mac only. Other computers aren't included.")
+            Text("·")
             if model.isRefreshing {
                 Text("Refreshing…")
             } else if let t = model.lastUpdated {
                 TimelineView(.periodic(from: .now, by: 5)) { ctx in Text("Updated \(ago(t, ctx.date))") }
             }
             Spacer()
-            Button("Refresh") { model.refresh() }.disabled(model.isRefreshing)
+            Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                .help("Refresh now").disabled(model.isRefreshing)
             Button("Quit") { NSApp.terminate(nil) }
         }
         .font(.caption).foregroundStyle(.secondary).controlSize(.small)

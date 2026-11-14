@@ -26,12 +26,16 @@ struct PanelView: View {
             .pickerStyle(.segmented).labelsHidden()
 
             if model.hasData {
+                let tools = model.tools
                 VStack(alignment: .leading, spacing: 2) {
                     Text(money(model.total(model.range)))
                         .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                    Text("API value · estimated by ccusage").font(.caption).foregroundStyle(.secondary)
+                        .help("API value of your usage, estimated by ccusage. Subscriptions are billed at a flat price.")
+                    // One tool: name it here instead of repeating the same amount in a row below.
+                    Text(tools.count == 1 ? Tools.name(tools[0]) : tools.isEmpty ? "No usage in the last 30 days" : "All tools")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
-                toolRows
+                if tools.count > 1 { toolRows }
                 chart
             } else if let e = model.error {
                 Label(e, systemImage: "exclamationmark.triangle").font(.callout)

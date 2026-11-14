@@ -120,31 +120,33 @@ struct PanelView: View {
         return model.lastWeek.contains { $0.key == key } ? key : nil
     }
 
+    // The whole card is the button: clicking it is the fix.
     private var loginWarning: some View {
         let needsApproval = model.loginStatus == .requiresApproval
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.title3).foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(needsApproval ? "Approve AI Usage Bar in Login Items" : "Won't start after a restart")
-                    .font(.callout.weight(.semibold))
-                Text(needsApproval
-                     ? "macOS needs your OK before it can start at login."
-                     : "Turn on start at login so it's always in your menu bar.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if needsApproval {
-                    Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
-                        .buttonStyle(.borderedProminent).controlSize(.small)
-                } else {
-                    Button("Start at login") { model.setStartAtLogin(true) }
-                        .buttonStyle(.borderedProminent).controlSize(.small)
+        return Button {
+            if needsApproval { SMAppService.openSystemSettingsLoginItems() } else { model.setStartAtLogin(true) }
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title3).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(needsApproval ? "Tap to approve in Login Items" : "Tap to start after restart")
+                        .font(.callout.weight(.semibold))
+                    Text(needsApproval
+                         ? "macOS needs your OK before it can start at login."
+                         : "So it's always in your menu bar, even after a reboot.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.35)))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
-        .padding(10)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.35)))
+        .buttonStyle(.plain)
     }
 
     private var footer: some View {

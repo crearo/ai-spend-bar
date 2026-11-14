@@ -1,23 +1,23 @@
-# AI Usage Bar
+# AI Spend Bar
 
 See how much you've spent on AI coding tools today, right in your Mac's menu bar.
 
-![AI Usage Bar in the macOS menu bar](docs/menu-bar.png)
+![AI Spend Bar in the macOS menu bar](docs/menu-bar.png)
 
 ## Install
 
 ```sh
-npx ai-usage-bar
+npx ai-spend-bar
 ```
 
 That's it. It starts now and every time you log in.
 
-No Node? Use `curl -fsSL https://raw.githubusercontent.com/crearo/ai-usage-bar/main/install.sh | bash`
+No Node? Use `curl -fsSL https://raw.githubusercontent.com/crearo/ai-spend-bar/main/install.sh | bash`
 
 ## Uninstall
 
 ```sh
-npx ai-usage-bar uninstall
+npx ai-spend-bar uninstall
 ```
 
 ---

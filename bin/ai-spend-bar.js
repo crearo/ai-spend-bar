@@ -8,10 +8,10 @@ const dryRun = args.includes("--dry-run");
 const cmd = args.find((a) => !a.startsWith("-")) || (args.some((a) => a === "-h" || a === "--help") ? "help" : "setup");
 
 if (cmd === "help") {
-  console.log(`Usage: npx ai-usage-bar [command] [--dry-run]
+  console.log(`Usage: npx ai-spend-bar [command] [--dry-run]
 
 Commands:
-  setup      Install or repair AI Usage Bar (default)
+  setup      Install or repair AI Spend Bar (default)
   uninstall  Remove the app and turn off start at login
   help       Show this help
 
@@ -19,7 +19,7 @@ Commands:
   process.exit(0);
 }
 if (cmd !== "setup" && cmd !== "uninstall") {
-  console.error(`Unknown command: ${cmd} (try: npx ai-usage-bar help)`);
+  console.error(`Unknown command: ${cmd} (try: npx ai-spend-bar help)`);
   process.exit(2);
 }
 

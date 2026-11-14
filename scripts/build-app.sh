@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Build "dist/AI Usage Bar.app" (universal) and dist/AI-Usage-Bar.zip.
+# Build "dist/AI Spend Bar.app" (universal) and dist/AI-Spend-Bar.zip.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 NPM_VERSION="$(node -p "require('./package.json').version")"
 # Versions are yyyyMMdd.N; npm requires three parts, so package.json carries yyyyMMdd.N.0.
 VERSION="${NPM_VERSION%.0}"
-APP="$ROOT/dist/AI Usage Bar.app"
-ZIP="$ROOT/dist/AI-Usage-Bar.zip"
+APP="$ROOT/dist/AI Spend Bar.app"
+ZIP="$ROOT/dist/AI-Spend-Bar.zip"
 
-echo "Building AI Usage Bar $VERSION"
+echo "Building AI Spend Bar $VERSION"
 (cd app && swift build -c release --arch arm64 --arch x86_64)
-BIN="$(cd app && swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/AIUsageBar"
+BIN="$(cd app && swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/AISpendBar"
 
 rm -rf "$APP" "$ZIP"
 mkdir -p "$APP/Contents/MacOS"
-cp "$BIN" "$APP/Contents/MacOS/AIUsageBar"
+cp "$BIN" "$APP/Contents/MacOS/AISpendBar"
 # App icon ({$} on mint). Regenerate with: swift design/icon/render.swift
 mkdir -p "$APP/Contents/Resources"
 cp app/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
@@ -25,9 +25,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key><string>com.verycuteapps.ai-usage-bar</string>
-  <key>CFBundleName</key><string>AI Usage Bar</string>
-  <key>CFBundleDisplayName</key><string>AI Usage Bar</string>
-  <key>CFBundleExecutable</key><string>AIUsageBar</string>
+  <key>CFBundleName</key><string>AI Spend Bar</string>
+  <key>CFBundleDisplayName</key><string>AI Spend Bar</string>
+  <key>CFBundleExecutable</key><string>AISpendBar</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
@@ -54,4 +54,4 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 echo
 echo "App:   $APP"
 echo "Zip:   $ZIP ($(du -h "$ZIP" | cut -f1))"
-echo "Archs: $(lipo -archs "$APP/Contents/MacOS/AIUsageBar")"
+echo "Archs: $(lipo -archs "$APP/Contents/MacOS/AISpendBar")"

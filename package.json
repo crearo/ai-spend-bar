@@ -1,13 +1,13 @@
 {
-  "name": "ai-usage-bar",
-  "version": "20261114.2.0",
+  "name": "ai-spend-bar",
+  "version": "20261114.3.0",
   "description": "Daily AI coding spend (Claude Code, Codex, Gemini CLI and more) in your Mac's menu bar",
   "license": "MIT",
   "os": [
     "darwin"
   ],
   "bin": {
-    "ai-usage-bar": "bin/ai-usage-bar.js"
+    "ai-spend-bar": "bin/ai-spend-bar.js"
   },
   "scripts": {
     "prepublishOnly": "scripts/build-app.sh"
@@ -15,13 +15,13 @@
   "files": [
     "bin/",
     "install.sh",
-    "dist/AI-Usage-Bar.zip"
+    "dist/AI-Spend-Bar.zip"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/crearo/ai-usage-bar.git"
+    "url": "git+https://github.com/crearo/ai-spend-bar.git"
   },
-  "homepage": "https://github.com/crearo/ai-usage-bar",
+  "homepage": "https://github.com/crearo/ai-spend-bar",
   "engines": {
     "node": ">=18"
   }

@@ -1,0 +1,12 @@
+{
+  "name": "ai-usage-bar",
+  "version": "20261114.3.0",
+  "description": "Renamed to ai-spend-bar. This package just runs npx ai-spend-bar.",
+  "license": "MIT",
+  "os": ["darwin"],
+  "bin": { "ai-usage-bar": "bin/ai-usage-bar.js" },
+  "files": ["bin/"],
+  "repository": { "type": "git", "url": "git+https://github.com/crearo/ai-spend-bar.git" },
+  "homepage": "https://github.com/crearo/ai-spend-bar",
+  "engines": { "node": ">=18" }
+}

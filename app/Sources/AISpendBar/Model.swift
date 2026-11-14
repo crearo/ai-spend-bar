@@ -175,7 +175,7 @@ final class UsageModel: ObservableObject {
         if let last = d.object(forKey: "lastUpdateCheck") as? Date, Date().timeIntervalSince(last) < 86_400 { return }
         d.set(Date(), forKey: "lastUpdateCheck")
         Task {
-            guard let url = URL(string: "https://registry.npmjs.org/ai-usage-bar/latest"),
+            guard let url = URL(string: "https://registry.npmjs.org/ai-spend-bar/latest"),
                   let (data, _) = try? await URLSession.shared.data(from: url),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let latest = obj["version"] as? String else { return }
@@ -227,7 +227,7 @@ enum Shell {
 
     static func runCCUsage(env: [String: String], since: String, until: String) -> Result<Data, ShellError> {
         guard let npx = findExecutable("npx", path: env["PATH"] ?? "") else {
-            return .failure(ShellError(message: "Node.js is needed. Install it, then run npx ai-usage-bar again."))
+            return .failure(ShellError(message: "Node.js is needed. Install it, then run npx ai-spend-bar again."))
         }
         return run(npx, ["--yes", "ccusage@latest", "daily", "--json", "--by-agent", "--since", since, "--until", until],
                    env: env, timeout: 90)

@@ -12,7 +12,7 @@ cat <<MSG
 Next:
   git commit -am "Release $v"
   npm publish            (prepublishOnly rebuilds the app)
-  cd /tmp && npx --yes ai-usage-bar@latest --dry-run
+  cd /tmp && npx --yes ai-spend-bar@latest --dry-run
   git push               (after npm has the new version: old installs' "Install the new app" runs npx @latest)
 Signing: DEVELOPER_ID="Developer ID Application: ..." scripts/build-app.sh (once there's a cert).
 Notarization: not set up yet.

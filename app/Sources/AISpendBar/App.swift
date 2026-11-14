@@ -2,7 +2,7 @@ import ServiceManagement
 import SwiftUI
 
 @main
-struct AIUsageBarApp: App {
+struct AISpendBarApp: App {
     @StateObject private var model = UsageModel()
 
     init() {

@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "AIUsageBar",
+    name: "AISpendBar",
     platforms: [.macOS(.v13)],
     targets: [
         .target(name: "AIUsageCore"),
-        .executableTarget(name: "AIUsageBar", dependencies: ["AIUsageCore"]),
+        .executableTarget(name: "AISpendBar", dependencies: ["AIUsageCore"]),
         .testTarget(name: "AIUsageCoreTests", dependencies: ["AIUsageCore"],
                     resources: [.copy("Fixtures")]),
     ]

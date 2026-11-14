@@ -125,10 +125,22 @@ final class UsageModel: ObservableObject {
         }
     }
 
-    /// Last 7 days of enabled-tool totals, oldest first.
-    var lastWeek: [(day: Date, key: String, cost: Double)] {
-        return (0..<7).reversed().map { back in
-            let d = Calendar.current.date(byAdding: .day, value: -back, to: Calendar.current.startOfDay(for: Date()))!
+    /// Daily enabled-tool totals for the chart, oldest first. Today shows the last 7 days for
+    /// context; Week shows Mon–Sun of this week; Month shows every day of this month.
+    /// Future days are included with no cost so bars keep a steady width.
+    func chartDays(_ r: Range) -> [(day: Date, key: String, cost: Double)] {
+        var cal = Calendar(identifier: .gregorian); cal.firstWeekday = 2  // Monday
+        let today = cal.startOfDay(for: Date())
+        let first: Date, count: Int
+        switch r {
+        case .today: first = cal.date(byAdding: .day, value: -6, to: today)!; count = 7
+        case .week: first = start(of: .week); count = 7
+        case .month:
+            first = start(of: .month)
+            count = cal.range(of: .day, in: .month, for: today)?.count ?? 30
+        }
+        return (0..<count).map { i in
+            let d = cal.date(byAdding: .day, value: i, to: first)!
             let k = Self.dayKey(d)
             return (d, k, (costs[k] ?? [:]).filter { isCounted($0.key) }.values.reduce(0, +))
         }

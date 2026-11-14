@@ -90,7 +90,9 @@ struct PanelView: View {
     }
 
     private var chart: some View {
-        let week = model.lastWeek
+        let range = model.range
+        let week = model.chartDays(range)
+        let isMonth = range == .month
         let today = UsageModel.dayKey(Date())
         let focusKey = selectedDay ?? today
         let focus = week.first { $0.key == focusKey }
@@ -105,14 +107,21 @@ struct PanelView: View {
                     .foregroundStyle(d.key == focusKey ? Color.accentColor : Color.secondary.opacity(0.45))
                     .cornerRadius(3)
                     .annotation(position: .top, spacing: 2) {
-                        if d.cost >= 0.5 {
+                        // ~30 bars leave no room for labels; hover shows the amount.
+                        if !isMonth && d.cost >= 0.5 {
                             Text("$\(Int(d.cost.rounded()))").font(.system(size: 9)).foregroundStyle(.secondary)
                         }
                     }
             }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) { _ in
-                    AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                if isMonth {
+                    AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                        AxisValueLabel(format: .dateTime.day(), centered: true)
+                    }
+                } else {
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                    }
                 }
             }
             .chartYAxis(.hidden)
@@ -136,7 +145,7 @@ struct PanelView: View {
         let x = point.x - geo[proxy.plotAreaFrame].origin.x
         guard let date: Date = proxy.value(atX: x) else { return nil }
         let key = UsageModel.dayKey(date)
-        return model.lastWeek.contains { $0.key == key } ? key : nil
+        return model.chartDays(model.range).contains { $0.key == key } ? key : nil
     }
 
     // The whole card is the button: clicking it is the fix.

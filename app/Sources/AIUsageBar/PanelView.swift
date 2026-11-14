@@ -159,11 +159,8 @@ struct PanelView: View {
     }
 
     private var footer: some View {
+        VStack(alignment: .leading, spacing: 6) {
         HStack {
-            // Usage comes from this Mac's local logs only; other devices aren't included.
-            Label("This Mac only", systemImage: "laptopcomputer")
-                .help("Counts AI usage on this Mac only. Other computers aren't included.")
-            Text("·")
             if model.isRefreshing {
                 Text("Refreshing…")
             } else if let t = model.lastUpdated {
@@ -173,6 +170,10 @@ struct PanelView: View {
             Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
                 .help("Refresh now").disabled(model.isRefreshing)
             Button("Quit") { NSApp.terminate(nil) }
+        }
+        // Usage comes from this Mac's local logs only; other devices aren't included.
+        Label("Data from this Mac only", systemImage: "laptopcomputer")
+            .help("Counts AI usage on this Mac only. Other computers aren't included.")
         }
         .font(.caption).foregroundStyle(.secondary).controlSize(.small)
     }

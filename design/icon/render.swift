@@ -1,16 +1,14 @@
-// Renders the "{$}" app icon and builds app/Resources/AppIcon.icns.
+// Renders the app icon (a dark terminal window with a mint "$_" prompt) and builds
+// app/Resources/AppIcon.icns. Other styles we tried live in concepts.swift.
 // Usage: swift design/icon/render.swift
 import AppKit
 
-let glyph = "{$}"
-let background = rgb(0x3CCB9A)  // mint
-let foreground = NSColor.white
-
-func rgb(_ hex: UInt32) -> NSColor {
+func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255,
-            blue: CGFloat(hex & 0xff) / 255, alpha: 1)
+            blue: CGFloat(hex & 0xff) / 255, alpha: a)
 }
 
+let mint = rgb(0x3CCB9A)
 let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let repo = here.deletingLastPathComponent().deletingLastPathComponent()
 
@@ -19,38 +17,42 @@ func bitmap(_ w: Int, _ h: Int) -> NSBitmapImageRep {
                      hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
 }
 
-/// One icon at `size` px, on Apple's macOS icon grid
-/// (1024 canvas, 824 rounded-square body, ~185 corner radius, soft drop shadow).
+func withShadow(_ color: NSColor, blur: CGFloat, dy: CGFloat, _ draw: () -> Void) {
+    NSGraphicsContext.saveGraphicsState()
+    let sh = NSShadow(); sh.shadowColor = color; sh.shadowBlurRadius = blur; sh.shadowOffset = NSSize(width: 0, height: dy)
+    sh.set(); draw()
+    NSGraphicsContext.restoreGraphicsState()
+}
+
+/// The icon at `size` px. Drawn in a 1024 space on Apple's macOS icon grid
+/// (824 rounded-square body, ~185 corner radius, soft drop shadow).
 func renderIcon(size: CGFloat) -> NSBitmapImageRep {
     let rep = bitmap(Int(size), Int(size))
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    let s = size / 1024
-    let body = NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
-    let path = NSBezierPath(roundedRect: body, xRadius: 185 * s, yRadius: 185 * s)
+    NSGraphicsContext.current!.cgContext.scaleBy(x: size / 1024, y: size / 1024)
+
+    let body = NSBezierPath(roundedRect: NSRect(x: 100, y: 100, width: 824, height: 824), xRadius: 185, yRadius: 185)
+    withShadow(.black.withAlphaComponent(0.28), blur: 24, dy: -10) { NSColor.black.setFill(); body.fill() }
+    NSGradient(starting: rgb(0x15171C), ending: rgb(0x343A44))!.draw(in: body, angle: 90)
 
     NSGraphicsContext.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
-    shadow.shadowOffset = NSSize(width: 0, height: -10 * s)
-    shadow.shadowBlurRadius = 24 * s
-    shadow.set()
-    background.setFill(); path.fill()
+    body.addClip()
+    // Title bar with the three window buttons.
+    rgb(0xFFFFFF, 0.06).setFill(); NSRect(x: 100, y: 770, width: 824, height: 154).fill()
+    for (i, c) in [rgb(0xFF5F57), rgb(0xFEBC2E), rgb(0x28C840)].enumerated() {
+        c.setFill(); NSBezierPath(ovalIn: NSRect(x: 190 + CGFloat(i) * 70, y: 822, width: 44, height: 44)).fill()
+    }
+    // Prompt "$" and a cursor, with a soft glow.
+    withShadow(mint.withAlphaComponent(0.6), blur: 40, dy: 0) {
+        let dollar = NSAttributedString(string: "$", attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: 380, weight: .heavy), .foregroundColor: mint])
+        let ink = dollar.boundingRect(with: .zero, options: [.usesLineFragmentOrigin, .usesDeviceMetrics])
+        dollar.draw(at: NSPoint(x: 350 - ink.midX, y: 430 - ink.midY))
+        mint.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 560, y: 285, width: 190, height: 52), xRadius: 14, yRadius: 14).fill()
+    }
     NSGraphicsContext.restoreGraphicsState()
-
-    // Chunky rounded type: SF Pro Rounded, black weight.
-    var font = NSFont.systemFont(ofSize: 400 * s, weight: .black)
-    if let d = font.fontDescriptor.withDesign(.rounded) { font = NSFont(descriptor: d, size: 400 * s) ?? font }
-    let text = NSAttributedString(string: glyph, attributes: [.font: font, .foregroundColor: foreground, .kern: -8 * s])
-    // Fit the ink to ~72% of the body width, then center it optically on its real bounds.
-    let ink = text.boundingRect(with: .zero, options: [.usesLineFragmentOrigin, .usesDeviceMetrics])
-    let scale = min((824 * 0.72 * s) / ink.width, (824 * 0.62 * s) / ink.height)
-    let ctx = NSGraphicsContext.current!.cgContext
-    ctx.saveGState()
-    ctx.translateBy(x: body.midX, y: body.midY)
-    ctx.scaleBy(x: scale, y: scale)
-    text.draw(at: NSPoint(x: -ink.midX, y: -ink.midY))
-    ctx.restoreGState()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

@@ -20,8 +20,6 @@ No npm? Use:
 curl -fsSL https://raw.githubusercontent.com/crearo/ai-usage-bar/main/install.sh | bash
 ```
 
-(`npx` works once the package is published to npm; until then use the curl line.)
-
 The installer sets up Node.js and SwiftBar if needed (via Homebrew when available), puts the code in `~/.ai-usage-bar` (or uses your git clone if you run `./install.sh` from it), points SwiftBar at the plugin, and makes SwiftBar start at login. Re-run it any time to repair the install. Add `--dry-run` to see what it would do.
 
 ## What it shows

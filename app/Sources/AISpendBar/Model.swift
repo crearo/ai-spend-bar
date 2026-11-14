@@ -19,6 +19,11 @@ final class UsageModel: ObservableObject {
         didSet { UserDefaults.standard.set(Array(excluded).sorted(), forKey: "excludedTools") }
     }
     @Published private(set) var loginStatus: SMAppService.Status = SMAppService.mainApp.status
+    @Published private(set) var isUpdating = false
+    /// Setting (on by default; switch in the panel).
+    @Published var autoUpdate = UserDefaults.standard.object(forKey: "autoUpdate") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoUpdate, forKey: "autoUpdate"); if autoUpdate { maybeAutoUpdate() } }
+    }
 
     private var env: [String: String]?
     private var isSample = false
@@ -48,9 +53,21 @@ final class UsageModel: ObservableObject {
         loginStatus = SMAppService.mainApp.status
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh(); self?.checkForUpdate(); self?.refreshLoginStatus() }
+            Task { @MainActor in
+                self?.refresh(); self?.checkForUpdate(); self?.refreshLoginStatus()
+            }
         }
         checkForUpdate()
+    }
+
+    private static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    /// Only the copy installed by the installer updates itself (not dev builds).
+    private static var isInstalledCopy: Bool {
+        Bundle.main.bundlePath == FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications/AI Spend Bar.app").path
     }
 
     // MARK: Derived values
@@ -180,10 +197,12 @@ final class UsageModel: ObservableObject {
     // MARK: Update check (at most once a day)
 
     func checkForUpdate() {
+        guard !isSample else { return }
         let d = UserDefaults.standard
-        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        let current = Self.appVersion
         if let latest = d.string(forKey: "latestVersion"), Version.isNewer(latest, than: current) {
             updateAvailable = latest
+            maybeAutoUpdate()
         }
         if let last = d.object(forKey: "lastUpdateCheck") as? Date, Date().timeIntervalSince(last) < 86_400 { return }
         d.set(Date(), forKey: "lastUpdateCheck")
@@ -194,8 +213,38 @@ final class UsageModel: ObservableObject {
                   let latest = obj["version"] as? String else { return }
             d.set(latest, forKey: "latestVersion")
             updateAvailable = Version.isNewer(latest, than: current) ? latest : nil
+            maybeAutoUpdate()
         }
     }
+
+    // MARK: Updating
+
+    /// Automatic updates: quietly run the same installer people used to install the app.
+    /// One try per version, so a failing update doesn't loop.
+    func maybeAutoUpdate() {
+        guard autoUpdate, let v = updateAvailable else { return }
+        let d = UserDefaults.standard
+        guard d.string(forKey: "autoUpdateTried") != v else { return }
+        d.set(v, forKey: "autoUpdateTried")
+        installUpdate()
+    }
+
+    /// Runs `npx ai-spend-bar@latest`, which quits this app, replaces it in ~/Applications and reopens it.
+    func installUpdate() {
+        guard !isSample, !isUpdating, Self.isInstalledCopy else { return }
+        isUpdating = true
+        let cachedEnv = env
+        let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/AI Spend Bar/update.log")
+        Task.detached {
+            let env = cachedEnv ?? Shell.userEnvironment()
+            let started = Shell.launch("npx", ["--yes", "ai-spend-bar@latest"], env: env, log: log) {
+                // Still running after the installer finished means it failed; let the user retry.
+                Task { @MainActor in self.isUpdating = false }
+            }
+            if !started { await MainActor.run { self.isUpdating = false } }
+        }
+    }
+
 }
 
 struct ShellError: Error { let message: String }
@@ -232,6 +281,24 @@ enum Shell {
             let hasSettings = fm.fileExists(atPath: dir.appendingPathComponent("settings.json").path)
             return hasProjects || hasSettings ? dir.path : nil
         }
+    }
+
+    /// Starts `name` (found on PATH) without waiting; output goes to `log`. Returns false if it couldn't start.
+    static func launch(_ name: String, _ args: [String], env: [String: String], log: URL,
+                       onExit: @escaping @Sendable () -> Void) -> Bool {
+        guard let exe = findExecutable(name, path: env["PATH"] ?? "") else { return false }
+        try? FileManager.default.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        guard let out = try? FileHandle(forWritingTo: log) else { return false }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        p.arguments = args
+        p.environment = env
+        p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        p.standardOutput = out; p.standardError = out; p.standardInput = FileHandle.nullDevice
+        p.terminationHandler = { _ in onExit() }
+        do { try p.run() } catch { return false }
+        return true
     }
 
     static func findExecutable(_ name: String, path: String) -> String? {

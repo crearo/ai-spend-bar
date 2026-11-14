@@ -24,6 +24,7 @@ npx ai-spend-bar
 - today, this week, this month
 - claude code, codex + 19 more (via [ccusage](https://github.com/ryoppippi/ccusage))
 - API value, from this mac's local logs
+- updates itself automatically
 - no node? `curl -fsSL https://raw.githubusercontent.com/crearo/ai-spend-bar/main/install.sh | bash`
 
 ## Uninstall

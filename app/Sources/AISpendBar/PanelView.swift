@@ -6,6 +6,7 @@ import SwiftUI
 struct PanelView: View {
     @EnvironmentObject var model: UsageModel
     @State private var selectedDay: String?
+    @State private var showSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -15,9 +16,18 @@ struct PanelView: View {
             }
 
             if let v = model.updateAvailable {
-                Label("Update available (\(Version.display(v))) — run npx ai-spend-bar", systemImage: "arrow.down.circle")
-                    .font(.caption).padding(6).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                HStack {
+                    if model.isUpdating {
+                        ProgressView().controlSize(.small)
+                        Text("Updating to \(Version.display(v))…")
+                    } else {
+                        Label("Update available (\(Version.display(v)))", systemImage: "arrow.down.circle")
+                        Spacer()
+                        Button("Update") { model.installUpdate() }.controlSize(.small)
+                    }
+                }
+                .font(.caption).padding(6).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             }
 
             Picker("", selection: $model.range) {
@@ -160,6 +170,9 @@ struct PanelView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
+        if showSettings {
+            Toggle("Install updates automatically", isOn: $model.autoUpdate)
+        }
         HStack {
             if model.isRefreshing {
                 Text("Refreshing…")
@@ -167,6 +180,7 @@ struct PanelView: View {
                 TimelineView(.periodic(from: .now, by: 5)) { ctx in Text("Updated \(ago(t, ctx.date))") }
             }
             Spacer()
+            Button { showSettings.toggle() } label: { Image(systemName: "gearshape") }.help("Settings")
             Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
                 .help("Refresh now").disabled(model.isRefreshing)
             Button("Quit") { NSApp.terminate(nil) }

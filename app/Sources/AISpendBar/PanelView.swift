@@ -115,8 +115,12 @@ struct PanelView: View {
             }
             .chartXAxis {
                 if isMonth {
-                    AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-                        AxisValueLabel(format: .dateTime.day(), centered: true)
+                    // Mark every day but label only a few: a 7-day stride would center
+                    // each label across its whole week, landing it under the wrong bar.
+                    AxisMarks(values: .stride(by: .day)) { value in
+                        if let d = value.as(Date.self), [1, 8, 15, 22, 29].contains(Calendar.current.component(.day, from: d)) {
+                            AxisValueLabel(format: .dateTime.day(), centered: true)
+                        }
                     }
                 } else {
                     AxisMarks(values: .stride(by: .day)) { _ in

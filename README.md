@@ -1,6 +1,6 @@
 # AI Usage Bar
 
-See how much you've spent on Claude and Codex today, right in your Mac's menu bar.
+See how much you've spent on AI coding tools today, right in your Mac's menu bar.
 
 ![AI Usage Bar in the macOS menu bar](docs/menu-bar.png)
 
@@ -22,6 +22,6 @@ npx ai-usage-bar uninstall
 
 ---
 
-Click the menu bar item to switch between today, this week or this month, and between Claude, Codex or both. Costs are estimated by [ccusage](https://github.com/ryoppippi/ccusage). Runs on [SwiftBar](https://github.com/swiftbar/SwiftBar), so macOS may say "Ameba Labs, LLC added items" during install. That's SwiftBar's developer.
+Shows the API value of your usage today, this week or this month across Claude Code, Codex and the other tools [ccusage](https://github.com/ryoppippi/ccusage) supports; toggle tools in the panel. Requires macOS 13+ and Node.js (the installer sets up Node for you).
 
 [Watch the demo](https://youtube.com/shorts/dT2NoWe50r4?feature=share)

@@ -1,0 +1,274 @@
+{
+  "daily": [
+    {
+      "agent": "all",
+      "agents": [
+        {
+          "agent": "claude",
+          "cacheCreationTokens": 6927219,
+          "cacheReadTokens": 479148541,
+          "inputTokens": 4608,
+          "modelBreakdowns": [
+            {
+              "cacheCreation1hTokens": 2297696,
+              "cacheCreationTokens": 3242531,
+              "cacheReadTokens": 387574882,
+              "cost": 116.30908739999974,
+              "inputTokens": 3222,
+              "modelName": "claude-opus-5-5",
+              "outputTokens": 783774
+            },
+            {
+              "cacheCreation1hTokens": 0,
+              "cacheCreationTokens": 3300504,
+              "cacheReadTokens": 57480248,
+              "cost": 18.7618468,
+              "inputTokens": 1086,
+              "modelName": "claude-sonnet-5-5",
+              "outputTokens": 476039
+            },
+            {
+              "cacheCreation1hTokens": 384184,
+              "cacheCreationTokens": 384184,
+              "cacheReadTokens": 34093411,
+              "cost": 18.7322262,
+              "inputTokens": 300,
+              "modelName": "claude-fable-5-2",
+              "outputTokens": 144105
+            }
+          ],
+          "modelsUsed": [
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-fable-5-2"
+          ],
+          "outputTokens": 1403918,
+          "totalCost": 153.8031603999998,
+          "totalTokens": 487484286
+        }
+      ],
+      "cacheCreationTokens": 6927219,
+      "cacheReadTokens": 479148541,
+      "inputTokens": 4608,
+      "metadata": {
+        "agents": [
+          "claude"
+        ]
+      },
+      "modelBreakdowns": [
+        {
+          "cacheCreation1hTokens": 2297696,
+          "cacheCreationTokens": 3242531,
+          "cacheReadTokens": 387574882,
+          "cost": 116.30908739999974,
+          "inputTokens": 3222,
+          "modelName": "claude-opus-5-5",
+          "outputTokens": 783774
+        },
+        {
+          "cacheCreation1hTokens": 0,
+          "cacheCreationTokens": 3300504,
+          "cacheReadTokens": 57480248,
+          "cost": 18.7618468,
+          "inputTokens": 1086,
+          "modelName": "claude-sonnet-5-5",
+          "outputTokens": 476039
+        },
+        {
+          "cacheCreation1hTokens": 384184,
+          "cacheCreationTokens": 384184,
+          "cacheReadTokens": 34093411,
+          "cost": 18.7322262,
+          "inputTokens": 300,
+          "modelName": "claude-fable-5-2",
+          "outputTokens": 144105
+        }
+      ],
+      "modelsUsed": [
+        "claude-fable-5-2",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5"
+      ],
+      "outputTokens": 1403918,
+      "period": "2026-11-12",
+      "totalCost": 153.8031603999998,
+      "totalTokens": 487484286
+    },
+    {
+      "agent": "all",
+      "agents": [
+        {
+          "agent": "claude",
+          "cacheCreationTokens": 2683167,
+          "cacheReadTokens": 53374445,
+          "inputTokens": 614,
+          "modelBreakdowns": [
+            {
+              "cacheCreation1hTokens": 1787203,
+              "cacheCreationTokens": 1787203,
+              "cacheReadTokens": 23817622,
+              "cost": 37.9279884,
+              "inputTokens": 202,
+              "modelName": "claude-fable-5-2",
+              "outputTokens": 114190
+            },
+            {
+              "cacheCreation1hTokens": 305319,
+              "cacheCreationTokens": 681147,
+              "cacheReadTokens": 28942489,
+              "cost": 14.828453800000004,
+              "inputTokens": 396,
+              "modelName": "claude-opus-5-5",
+              "outputTokens": 235834
+            },
+            {
+              "cacheCreation1hTokens": 0,
+              "cacheCreationTokens": 214817,
+              "cacheReadTokens": 614334,
+              "cost": 1.1368679000000002,
+              "inputTokens": 16,
+              "modelName": "claude-sonnet-5-5",
+              "outputTokens": 53836
+            }
+          ],
+          "modelsUsed": [
+            "claude-fable-5-2",
+            "claude-sonnet-5-5",
+            "claude-opus-5-5"
+          ],
+          "outputTokens": 403860,
+          "totalCost": 53.893310099999994,
+          "totalTokens": 56462086
+        }
+      ],
+      "cacheCreationTokens": 2683167,
+      "cacheReadTokens": 53374445,
+      "inputTokens": 614,
+      "metadata": {
+        "agents": [
+          "claude"
+        ]
+      },
+      "modelBreakdowns": [
+        {
+          "cacheCreation1hTokens": 1787203,
+          "cacheCreationTokens": 1787203,
+          "cacheReadTokens": 23817622,
+          "cost": 37.9279884,
+          "inputTokens": 202,
+          "modelName": "claude-fable-5-2",
+          "outputTokens": 114190
+        },
+        {
+          "cacheCreation1hTokens": 305319,
+          "cacheCreationTokens": 681147,
+          "cacheReadTokens": 28942489,
+          "cost": 14.828453800000004,
+          "inputTokens": 396,
+          "modelName": "claude-opus-5-5",
+          "outputTokens": 235834
+        },
+        {
+          "cacheCreation1hTokens": 0,
+          "cacheCreationTokens": 214817,
+          "cacheReadTokens": 614334,
+          "cost": 1.1368679000000002,
+          "inputTokens": 16,
+          "modelName": "claude-sonnet-5-5",
+          "outputTokens": 53836
+        }
+      ],
+      "modelsUsed": [
+        "claude-fable-5-2",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5"
+      ],
+      "outputTokens": 403860,
+      "period": "2026-11-13",
+      "totalCost": 53.893310099999994,
+      "totalTokens": 56462086
+    },
+    {
+      "agent": "all",
+      "agents": [
+        {
+          "agent": "claude",
+          "cacheCreationTokens": 4565664,
+          "cacheReadTokens": 100900148,
+          "inputTokens": 1034,
+          "modelBreakdowns": [
+            {
+              "cacheCreation1hTokens": 2455967,
+              "cacheCreationTokens": 2822290,
+              "cacheReadTokens": 81097638,
+              "cost": 44.38835060000001,
+              "inputTokens": 718,
+              "modelName": "claude-opus-5-5",
+              "outputTokens": 334330
+            },
+            {
+              "cacheCreation1hTokens": 0,
+              "cacheCreationTokens": 1743374,
+              "cacheReadTokens": 19802510,
+              "cost": 8.020957999999998,
+              "inputTokens": 316,
+              "modelName": "claude-sonnet-5-5",
+              "outputTokens": 168164
+            }
+          ],
+          "modelsUsed": [
+            "claude-opus-5-5",
+            "claude-sonnet-5-5"
+          ],
+          "outputTokens": 502494,
+          "totalCost": 52.409308599999996,
+          "totalTokens": 105969340
+        }
+      ],
+      "cacheCreationTokens": 4565664,
+      "cacheReadTokens": 100900148,
+      "inputTokens": 1034,
+      "metadata": {
+        "agents": [
+          "claude"
+        ]
+      },
+      "modelBreakdowns": [
+        {
+          "cacheCreation1hTokens": 2455967,
+          "cacheCreationTokens": 2822290,
+          "cacheReadTokens": 81097638,
+          "cost": 44.38835060000001,
+          "inputTokens": 718,
+          "modelName": "claude-opus-5-5",
+          "outputTokens": 334330
+        },
+        {
+          "cacheCreation1hTokens": 0,
+          "cacheCreationTokens": 1743374,
+          "cacheReadTokens": 19802510,
+          "cost": 8.020957999999998,
+          "inputTokens": 316,
+          "modelName": "claude-sonnet-5-5",
+          "outputTokens": 168164
+        }
+      ],
+      "modelsUsed": [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5"
+      ],
+      "outputTokens": 502494,
+      "period": "2026-11-14",
+      "totalCost": 52.409308599999996,
+      "totalTokens": 105969340
+    }
+  ],
+  "totals": {
+    "cacheCreationTokens": 43862519,
+    "cacheReadTokens": 2072739536,
+    "inputTokens": 20906,
+    "outputTokens": 8720239,
+    "totalCost": 770.0580795999997,
+    "totalTokens": 2125343200
+  }
+}

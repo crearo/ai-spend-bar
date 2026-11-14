@@ -7,3 +7,6 @@ swiftbar/.usage-counter.conf
 # Node/npm local state
 node_modules/
 npm-debug.log*
+
+# Built app
+dist/

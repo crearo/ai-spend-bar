@@ -12,7 +12,7 @@ if (cmd === "help") {
 
 Commands:
   setup      Install or repair AI Usage Bar (default)
-  uninstall  Turn off start at login and remove our plugin link
+  uninstall  Remove the app and turn off start at login
   help       Show this help
 
 --dry-run   Print what would happen without changing anything`);

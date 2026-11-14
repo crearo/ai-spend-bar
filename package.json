@@ -1,7 +1,7 @@
 {
   "name": "ai-usage-bar",
-  "version": "20261114.0.0",
-  "description": "Daily Claude and Codex AI spend in the macOS menu bar (SwiftBar plugin)",
+  "version": "20261114.1.0",
+  "description": "Daily AI coding spend (Claude Code, Codex, Gemini CLI and more) in your Mac's menu bar",
   "license": "MIT",
   "os": [
     "darwin"
@@ -9,9 +9,13 @@
   "bin": {
     "ai-usage-bar": "bin/ai-usage-bar.js"
   },
+  "scripts": {
+    "prepublishOnly": "scripts/build-app.sh"
+  },
   "files": [
     "bin/",
-    "install.sh"
+    "install.sh",
+    "dist/AI-Usage-Bar.zip"
   ],
   "repository": {
     "type": "git",

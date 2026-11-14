@@ -38,7 +38,7 @@ final class UsageModel: ObservableObject {
         loginStatus = SMAppService.mainApp.status
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh(); self?.checkForUpdate() }
+            Task { @MainActor in self?.refresh(); self?.checkForUpdate(); self?.refreshLoginStatus() }
         }
         checkForUpdate()
     }
@@ -98,7 +98,9 @@ final class UsageModel: ObservableObject {
 
     var menuLabel: String {
         guard hasData else { return "AI …" }
+        // ⚠︎ while start at login is off, so the fix is visible without opening the panel.
         return "AI $\(Int(total(.today).rounded()))" + (error != nil ? " ·" : "")
+            + (loginStatus != .enabled ? " ⚠︎" : "")
     }
 
     // MARK: Refresh

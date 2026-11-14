@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # <xbar.title>AI Usage</xbar.title>
-# <xbar.version>v1.4.0</xbar.version>
+# <xbar.version>20261114.0.0</xbar.version>
 # <xbar.author>local</xbar.author>
 # <xbar.desc>Shows daily AI spend (Claude/Codex via ccusage) in the macOS menu bar.</xbar.desc>
 # <xbar.dependencies>ccusage,node</xbar.dependencies>

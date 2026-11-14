@@ -1,12 +1,24 @@
 {
   "name": "ai-usage-bar",
-  "version": "1.0.0",
+  "version": "20261114.0.0",
   "description": "Daily Claude and Codex AI spend in the macOS menu bar (SwiftBar plugin)",
   "license": "MIT",
-  "os": ["darwin"],
-  "bin": { "ai-usage-bar": "bin/ai-usage-bar.js" },
-  "files": ["bin/", "install.sh"],
-  "repository": { "type": "git", "url": "git+https://github.com/crearo/ai-usage-bar.git" },
+  "os": [
+    "darwin"
+  ],
+  "bin": {
+    "ai-usage-bar": "bin/ai-usage-bar.js"
+  },
+  "files": [
+    "bin/",
+    "install.sh"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crearo/ai-usage-bar.git"
+  },
   "homepage": "https://github.com/crearo/ai-usage-bar",
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

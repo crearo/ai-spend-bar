@@ -2,7 +2,10 @@
 
 See how much you've spent on AI coding tools today, right in your Mac's menu bar.
 
-![AI Spend Bar in the macOS menu bar](docs/menu-bar.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crearo/ai-spend-bar/main/docs/panel-dark.png">
+  <img src="https://raw.githubusercontent.com/crearo/ai-spend-bar/main/docs/panel-light.png" alt="AI Spend Bar in the macOS menu bar, with its panel open" width="520">
+</picture>
 
 ## Install
 

@@ -21,9 +21,19 @@ final class UsageModel: ObservableObject {
     @Published private(set) var loginStatus: SMAppService.Status = SMAppService.mainApp.status
 
     private var env: [String: String]?
+    private var isSample = false
     private var timer: Timer?
     private static let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("com.verycuteapps.ai-usage-bar/last.json")
+
+    /// Sample data for screenshots (`--snapshot`): no refresh, no login item, no network.
+    init(sample costs: [String: [String: Double]]) {
+        excluded = []
+        self.costs = costs
+        lastUpdated = Date().addingTimeInterval(-25)
+        loginStatus = .enabled
+        isSample = true
+    }
 
     init() {
         excluded = Set(UserDefaults.standard.stringArray(forKey: "excludedTools") ?? [])
@@ -162,7 +172,10 @@ final class UsageModel: ObservableObject {
         loginStatus = SMAppService.mainApp.status
     }
 
-    func refreshLoginStatus() { loginStatus = SMAppService.mainApp.status }
+    func refreshLoginStatus() {
+        guard !isSample else { return }
+        loginStatus = SMAppService.mainApp.status
+    }
 
     // MARK: Update check (at most once a day)
 

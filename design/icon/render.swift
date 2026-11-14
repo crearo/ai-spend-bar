@@ -43,8 +43,8 @@ func renderIcon(size: CGFloat) -> NSBitmapImageRep {
     for (i, c) in [rgb(0xFF5F57), rgb(0xFEBC2E), rgb(0x28C840)].enumerated() {
         c.setFill(); NSBezierPath(ovalIn: NSRect(x: 190 + CGFloat(i) * 70, y: 822, width: 44, height: 44)).fill()
     }
-    // Prompt "$" and a cursor, with a soft glow.
-    withShadow(mint.withAlphaComponent(0.6), blur: 40, dy: 0) {
+    // Prompt "$" and a cursor: flat, no glow.
+    do {
         let dollar = NSAttributedString(string: "$", attributes: [
             .font: NSFont.monospacedSystemFont(ofSize: 380, weight: .heavy), .foregroundColor: mint])
         let ink = dollar.boundingRect(with: .zero, options: [.usesLineFragmentOrigin, .usesDeviceMetrics])

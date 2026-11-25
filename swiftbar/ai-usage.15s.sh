@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # <xbar.title>AI Spend Bar</xbar.title>
-# <xbar.version>20261114.5</xbar.version>
+# <xbar.version>20261125.0</xbar.version>
 # <xbar.author>local</xbar.author>
 # <xbar.desc>AI Spend Bar is now a Mac app. This stub points you to it.</xbar.desc>
 

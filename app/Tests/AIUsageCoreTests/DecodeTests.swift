@@ -32,6 +32,16 @@ final class DecodeTests: XCTestCase {
         XCTAssertNil(CCUsageVersion.validated("1.2.3\n../evil"))
         XCTAssertNil(CCUsageVersion.validated("1.2.3\n"))
     }
+    func testCCUsageCandidates() {
+        XCTAssertEqual(CCUsageVersion.list(Data(#"["1.0.0","2.0.0"]"#.utf8)), ["1.0.0", "2.0.0"])
+        XCTAssertEqual(CCUsageVersion.list(Data(#""1.0.0""#.utf8)), ["1.0.0"])
+        XCTAssertEqual(CCUsageVersion.list(Data("npm ERR! nope".utf8)), [])
+        let all = ["20.0.9", "20.1.0-beta.1", "20.0.51", "20.1.2", "20.1.0", "20.1.1", "file:../evil"]
+        // Newest (20.1.2) is @latest; the beta and the bad spec are skipped; numeric, not text, order.
+        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: [], limit: 3), ["20.1.1", "20.1.0", "20.0.51"])
+        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: ["20.1.1"], limit: 2), ["20.1.0", "20.0.51"])
+        XCTAssertEqual(CCUsageVersion.candidates(["1.0.0"], excluding: [], limit: 3), [])
+    }
     func testVersion() {
         XCTAssertTrue(Version.isNewer("20261115.0.0", than: "20261114.3.0"))
         XCTAssertTrue(Version.isNewer("20261114.1.0", than: "20261114.0.9"))

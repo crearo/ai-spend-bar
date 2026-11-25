@@ -80,6 +80,20 @@ public enum CCUsageVersion {
     public static func validated(_ version: String) -> String? {
         version.range(of: #"\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\z"#, options: .regularExpression) != nil ? version : nil
     }
+
+    /// Versions from `npm view ccusage versions --json`: an array, or a bare string when there's one.
+    public static func list(_ json: Data) -> [String] {
+        let obj = try? JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed)
+        return (obj as? [String]) ?? (obj as? String).map { [$0] } ?? []
+    }
+
+    /// Older releases worth trying when `@latest` fails, newest first: stable semver only,
+    /// minus the newest (that's what `@latest` is) and any already tried.
+    public static func candidates(_ versions: [String], excluding tried: Set<String>, limit: Int) -> [String] {
+        let stable = versions.compactMap(validated).filter { !$0.contains("-") }
+            .sorted { Version.isNewer($0, than: $1) }
+        return Array(stable.dropFirst().filter { !tried.contains($0) }.prefix(limit))
+    }
 }
 
 public enum Version {

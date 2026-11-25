@@ -32,6 +32,7 @@ final class UsageModel: ObservableObject {
     private var timer: Timer?
     private static let lastGoodVersionKey = "ccusageLastGoodVersion"
     private static let lastGoodVersionCheckedKey = "ccusageLastGoodVersionCheckedAt"
+    private static let olderSearchFailedKey = "ccusageOlderSearchFailedAt"
     private static let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("com.verycuteapps.ai-usage-bar/last.json")
 
@@ -171,14 +172,21 @@ final class UsageModel: ObservableObject {
         let lastGood = d.string(forKey: Self.lastGoodVersionKey).flatMap(CCUsageVersion.validated)
         let shouldCheckVersion = (d.object(forKey: Self.lastGoodVersionCheckedKey) as? Date)
             .map { Date().timeIntervalSince($0) >= 86_400 } ?? true
+        // Searching older releases downloads each one, so after a search finds nothing, wait an hour.
+        let searchOlder = (d.object(forKey: Self.olderSearchFailedKey) as? Date)
+            .map { Date().timeIntervalSince($0) >= 3_600 } ?? true
         Task.detached(priority: .utility) {
             let env = cachedEnv ?? Shell.userEnvironment()
-            let result = CCUsage.fetch(env: env, since: since, until: until, lastGood: lastGood)
+            let result = CCUsage.fetch(env: env, since: since, until: until, lastGood: lastGood, searchOlder: searchOlder)
             await MainActor.run {
                 self.env = env
                 self.isRefreshing = false
                 switch result {
                 case .success(let fetched):
+                    if fetched.foundBySearch, let v = fetched.fallbackVersion {
+                        d.set(v, forKey: Self.lastGoodVersionKey)
+                        d.removeObject(forKey: Self.olderSearchFailedKey)
+                    }
                     do {
                         let r = try UsageReport.decode(fetched.data)
                         self.costs = r.costsByDay
@@ -192,6 +200,7 @@ final class UsageModel: ObservableObject {
                     }
                 case .failure(let e):
                     self.error = e.message
+                    if searchOlder, !e.timedOut { d.set(Date(), forKey: Self.olderSearchFailedKey) }
                 }
             }
             // After a good `@latest` run, note which version that was (daily), so a later failure
@@ -282,25 +291,53 @@ struct ShellError: Error {
 }
 
 /// Runs `ccusage@latest`; if that fails (say the registry can't resolve the newest release),
-/// retries with the last version that worked so usage keeps updating.
+/// retries with the last version that worked so usage keeps updating. With no such version
+/// (a fresh install) or if it fails too, tries a few older releases, newest first.
 enum CCUsage {
     struct Fetched: Sendable {
         let data: Data
         let fallbackVersion: String?
+        /// The fallback came from searching older releases, so it's a new last-good version.
+        var foundBySearch = false
     }
 
-    static func fetch(env: [String: String], since: String, until: String, lastGood: String?) -> Result<Fetched, ShellError> {
+    static let olderReleasesToTry = 3
+
+    static func fetch(env: [String: String], since: String, until: String, lastGood: String?,
+                      searchOlder: Bool) -> Result<Fetched, ShellError> {
         let args = ["daily", "--json", "--by-agent", "--since", since, "--until", until]
+        let e: ShellError
         switch Shell.runCCUsage(version: "latest", args, env: env, timeout: 90) {
-        case .success(let data):
-            return .success(Fetched(data: data, fallbackVersion: nil))
-        case .failure(let e):
-            // A timeout would likely repeat, and doubling the wait helps nobody.
-            guard !e.timedOut, let v = lastGood,
-                  case .success(let data) = Shell.runCCUsage(version: v, args, env: env, timeout: 90)
-            else { return .failure(e) }
-            return .success(Fetched(data: data, fallbackVersion: v))
+        case .success(let data): return .success(Fetched(data: data, fallbackVersion: nil))
+        case .failure(let err): e = err
         }
+        // A timeout would likely repeat, and doubling the wait helps nobody.
+        guard !e.timedOut else { return .failure(e) }
+        if let v = lastGood {
+            switch Shell.runCCUsage(version: v, args, env: env, timeout: 90) {
+            case .success(let data): return .success(Fetched(data: data, fallbackVersion: v))
+            case .failure(let err) where err.timedOut: return .failure(e)
+            case .failure: break
+            }
+        }
+        guard searchOlder else { return .failure(e) }
+        let tried: Set<String> = lastGood.map { [$0] } ?? []
+        for v in CCUsageVersion.candidates(publishedVersions(env: env), excluding: tried, limit: olderReleasesToTry) {
+            switch Shell.runCCUsage(version: v, args, env: env, timeout: 90) {
+            case .success(let data): return .success(Fetched(data: data, fallbackVersion: v, foundBySearch: true))
+            case .failure(let err) where err.timedOut: return .failure(e)
+            case .failure: continue
+            }
+        }
+        return .failure(e)
+    }
+
+    /// Every published ccusage version, from the same registry npx uses. Empty if npm can't say.
+    static func publishedVersions(env: [String: String]) -> [String] {
+        guard let npm = Shell.findExecutable("npm", path: env["PATH"] ?? ""),
+              case .success(let out) = Shell.run(npm, ["view", "ccusage", "versions", "--json"], env: env, timeout: 30)
+        else { return [] }
+        return CCUsageVersion.list(out)
     }
 
     static func latestVersion(env: [String: String]) -> String? {

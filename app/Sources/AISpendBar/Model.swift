@@ -33,8 +33,8 @@ final class UsageModel: ObservableObject {
     }
 
     /// Settings: Codex at the company's own $ per credit instead of public API prices.
-    @Published var useInternalCodexPricing = UserDefaults.standard.bool(forKey: "useInternalCodexPricing") {
-        didSet { UserDefaults.standard.set(useInternalCodexPricing, forKey: "useInternalCodexPricing"); reprice() }
+    @Published var useCorporateCodexPricing = UserDefaults.standard.bool(forKey: "useCorporateCodexPricing") {
+        didSet { UserDefaults.standard.set(useCorporateCodexPricing, forKey: "useCorporateCodexPricing"); reprice() }
     }
     @Published var codexDollarsPerCredit = UserDefaults.standard.object(forKey: "codexDollarsPerCredit") as? Double
         ?? CodexPricing.publicDollarsPerCredit {
@@ -42,7 +42,7 @@ final class UsageModel: ObservableObject {
     }
 
     var codexPricing: CodexPricing {
-        CodexPricing(dollarsPerCredit: useInternalCodexPricing ? codexDollarsPerCredit : nil)
+        CodexPricing(dollarsPerCredit: useCorporateCodexPricing ? codexDollarsPerCredit : nil)
     }
 
     private func reprice() { costs = codexPricing.apply(apiCosts) }
@@ -65,7 +65,7 @@ final class UsageModel: ObservableObject {
     init(sample costs: [String: [String: Double]]) {
         excluded = []
         apiCosts = costs
-        useInternalCodexPricing = false  // public prices in screenshots, whatever this Mac has set
+        useCorporateCodexPricing = false  // public prices in screenshots, whatever this Mac has set
         reprice()  // didSet doesn't run in init
         lastUpdated = Date().addingTimeInterval(-25)
         loginStatus = .enabled

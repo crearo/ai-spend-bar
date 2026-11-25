@@ -41,7 +41,7 @@ struct PanelView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(money(model.total(model.range)))
                         .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .help(model.useInternalCodexPricing && model.tools.contains("codex")
+                        .help(model.useCorporateCodexPricing && model.tools.contains("codex")
                               ? "Codex at your $\(rateString(model.codexDollarsPerCredit)) per credit; other tools at API value, estimated by ccusage."
                               : "API value of your usage, estimated by ccusage. Subscriptions are billed at a flat price.")
                     // One tool: name it here instead of repeating the same amount in a row below.
@@ -225,9 +225,9 @@ struct PanelView: View {
     /// Off: Codex at public API prices. On: at the $ per credit typed here (from the company's
     /// OpenAI agreement; $0.04 is the public price).
     @ViewBuilder private var codexPricingSettings: some View {
-        Toggle("Use internal Codex pricing", isOn: $model.useInternalCodexPricing)
+        Toggle("Use corporate Codex pricing", isOn: $model.useCorporateCodexPricing)
             .help("Price Codex at your company's $ per credit instead of public API prices.")
-        if model.useInternalCodexPricing {
+        if model.useCorporateCodexPricing {
             let typed = CodexPricing.parseRate(rateText)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {

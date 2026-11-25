@@ -122,10 +122,10 @@ final class DecodeTests: XCTestCase {
 
         let costs = ["2026-11-25": ["codex": 8.0, "claude": 20.0], "2026-11-24": ["claude": 3.0]]
         XCTAssertEqual(publicPrice.apply(costs), costs)
-        let internalPrice = CodexPricing(dollarsPerCredit: 0.01).apply(costs)
-        XCTAssertEqual(internalPrice["2026-11-25"]?["codex"] ?? 0, 2, accuracy: 1e-9)
-        XCTAssertEqual(internalPrice["2026-11-25"]?["claude"], 20)
-        XCTAssertEqual(internalPrice["2026-11-24"], ["claude": 3.0])
+        let corporatePrice = CodexPricing(dollarsPerCredit: 0.01).apply(costs)
+        XCTAssertEqual(corporatePrice["2026-11-25"]?["codex"] ?? 0, 2, accuracy: 1e-9)
+        XCTAssertEqual(corporatePrice["2026-11-25"]?["claude"], 20)
+        XCTAssertEqual(corporatePrice["2026-11-24"], ["claude": 3.0])
     }
     func testParseRate() {
         XCTAssertEqual(CodexPricing.parseRate("0.04"), 0.04)

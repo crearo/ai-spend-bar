@@ -10,5 +10,5 @@
 echo "AI ↑"
 echo "---"
 echo "AI Spend Bar is now a Mac app"
-echo "Install the new app | bash=/bin/zsh param1=-lc param2=\"npx --yes ai-spend-bar@latest\" terminal=true"
+echo "Install the new app | bash=/bin/zsh param1=-lc param2=\"npx --yes --prefer-online ai-spend-bar@latest\" terminal=true"
 echo "Afterwards you can remove SwiftBar if you don't use it for anything else"

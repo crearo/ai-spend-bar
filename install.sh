@@ -151,10 +151,10 @@ step "3/5 Installing the app"
 if [[ -z "$ZIP" || ! -f "$ZIP" ]]; then
   info "Getting the latest release with npx"
   if (( DRY_RUN )); then
-    run npx --yes ai-spend-bar@latest
+    run npx --yes --prefer-online ai-spend-bar@latest
     exit 0
   fi
-  exec npx --yes ai-spend-bar@latest
+  exec npx --yes --prefer-online ai-spend-bar@latest
 fi
 quit_app
 remove_old_app

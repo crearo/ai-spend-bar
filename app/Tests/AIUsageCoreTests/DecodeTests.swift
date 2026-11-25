@@ -42,6 +42,18 @@ final class DecodeTests: XCTestCase {
         XCTAssertEqual(CCUsageVersion.candidates(all, excluding: ["20.1.1"], limit: 2), ["20.1.0", "20.0.51"])
         XCTAssertEqual(CCUsageVersion.candidates(["1.0.0"], excluding: [], limit: 3), [])
     }
+    func testAutoUpdateBackoff() {
+        let h: TimeInterval = 3_600
+        XCTAssertEqual((0...8).map { AutoUpdate.wait(afterAttempts: $0) }, [0, h, 2*h, 4*h, 8*h, 16*h, 24*h, 24*h, 24*h])
+        XCTAssertEqual(AutoUpdate.wait(afterAttempts: 1_000), 24*h)
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(AutoUpdate.isDue(attempts: 0, lastTry: nil, now: t))
+        XCTAssertTrue(AutoUpdate.isDue(attempts: 3, lastTry: nil, now: t))
+        XCTAssertFalse(AutoUpdate.isDue(attempts: 1, lastTry: t, now: t.addingTimeInterval(h - 1)))
+        XCTAssertTrue(AutoUpdate.isDue(attempts: 1, lastTry: t, now: t.addingTimeInterval(h)))
+        XCTAssertFalse(AutoUpdate.isDue(attempts: 9, lastTry: t, now: t.addingTimeInterval(23*h)))
+        XCTAssertTrue(AutoUpdate.isDue(attempts: 9, lastTry: t, now: t.addingTimeInterval(24*h)))
+    }
     func testVersion() {
         XCTAssertTrue(Version.isNewer("20261115.0.0", than: "20261114.3.0"))
         XCTAssertTrue(Version.isNewer("20261114.1.0", than: "20261114.0.9"))

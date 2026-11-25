@@ -96,6 +96,21 @@ public enum CCUsageVersion {
     }
 }
 
+/// Automatic updates never give up on a version; they back off instead, so a failing install
+/// (or one that somehow relaunches the old app) can't run every minute or on every launch.
+public enum AutoUpdate {
+    /// Wait before the next try after `attempts` tries: none, then 1h, 2h, 4h, 8h, 16h, then daily.
+    public static func wait(afterAttempts attempts: Int) -> TimeInterval {
+        guard attempts > 0 else { return 0 }
+        return min(3_600 * pow(2, Double(min(attempts - 1, 10))), 86_400)
+    }
+
+    public static func isDue(attempts: Int, lastTry: Date?, now: Date = Date()) -> Bool {
+        guard let lastTry else { return true }
+        return now.timeIntervalSince(lastTry) >= wait(afterAttempts: attempts)
+    }
+}
+
 public enum Version {
     /// "20261114.2.0" (npm form) -> "20261114.2" (the form people see).
     public static func display(_ v: String) -> String {

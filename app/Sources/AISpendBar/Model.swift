@@ -258,16 +258,22 @@ final class UsageModel: ObservableObject {
     // MARK: Updating
 
     /// Automatic updates: quietly run the same installer people used to install the app.
-    /// One try per version, so a failing update doesn't loop.
+    /// Keeps trying a version but backs off (see `AutoUpdate`), so a failing update doesn't loop.
     func maybeAutoUpdate() {
         guard autoUpdate, let v = updateAvailable else { return }
         let d = UserDefaults.standard
-        guard d.string(forKey: "autoUpdateTried") != v else { return }
+        // Older builds stored only the version they tried, once: count that as one try, due now.
+        let sameVersion = d.string(forKey: "autoUpdateTried") == v
+        let attempts = sameVersion ? max(d.integer(forKey: "autoUpdateAttempts"), 1) : 0
+        let lastTry = sameVersion ? d.object(forKey: "autoUpdateLastTry") as? Date : nil
+        guard AutoUpdate.isDue(attempts: attempts, lastTry: lastTry) else { return }
         d.set(v, forKey: "autoUpdateTried")
+        d.set(attempts + 1, forKey: "autoUpdateAttempts")
+        d.set(Date(), forKey: "autoUpdateLastTry")
         installUpdate()
     }
 
-    /// Runs `npx ai-spend-bar@latest`, which quits this app, replaces it in ~/Applications and reopens it.
+    /// Runs `npx ai-spend-bar@latest` (fresh from npm, not a cached version list), which quits this app, replaces it in ~/Applications and reopens it.
     func installUpdate() {
         guard !isSample, !isUpdating, Self.isInstalledCopy else { return }
         isUpdating = true
@@ -275,7 +281,7 @@ final class UsageModel: ObservableObject {
         let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/AI Spend Bar/update.log")
         Task.detached {
             let env = cachedEnv ?? Shell.userEnvironment()
-            let started = Shell.launch("npx", ["--yes", "ai-spend-bar@latest"], env: env, log: log) {
+            let started = Shell.launch("npx", ["--yes", "--prefer-online", "ai-spend-bar@latest"], env: env, log: log) {
                 // Still running after the installer finished means it failed; let the user retry.
                 Task { @MainActor in self.isUpdating = false }
             }

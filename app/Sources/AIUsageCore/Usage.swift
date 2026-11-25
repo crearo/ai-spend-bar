@@ -81,18 +81,74 @@ public enum CCUsageVersion {
         version.range(of: #"\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\z"#, options: .regularExpression) != nil ? version : nil
     }
 
-    /// Versions from `npm view ccusage versions --json`: an array, or a bare string when there's one.
-    public static func list(_ json: Data) -> [String] {
-        let obj = try? JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed)
-        return (obj as? [String]) ?? (obj as? String).map { [$0] } ?? []
-    }
-
-    /// Older releases worth trying when `@latest` fails, newest first: stable semver only,
-    /// minus the newest (that's what `@latest` is) and any already tried.
+    /// Releases worth trying when `@latest` fails, newest first: stable semver only, minus any
+    /// already tried. Pass the `latest` tag in `tried`: some setups (a corporate npm filter, say)
+    /// hide new releases from the list but not from the tag, so the newest *listed* is often fine.
     public static func candidates(_ versions: [String], excluding tried: Set<String>, limit: Int) -> [String] {
         let stable = versions.compactMap(validated).filter { !$0.contains("-") }
             .sorted { Version.isNewer($0, than: $1) }
-        return Array(stable.dropFirst().filter { !tried.contains($0) }.prefix(limit))
+        return Array(stable.filter { !tried.contains($0) }.prefix(limit))
+    }
+}
+
+/// `npm view <package> versions dist-tags --json`, as this Mac's npm sees it. The versions list
+/// is what npm will actually install here, which can be less than the public registry shows.
+public struct NPMPackageInfo: Equatable, Sendable {
+    public var versions: [String]
+    public var latest: String?
+
+    public init(versions: [String], latest: String?) { self.versions = versions; self.latest = latest }
+
+    public static func parse(_ json: Data) -> NPMPackageInfo? {
+        guard let obj = try? JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed) else { return nil }
+        if let d = obj as? [String: Any] {
+            let v = (d["versions"] as? [String]) ?? (d["versions"] as? String).map { [$0] } ?? []
+            return NPMPackageInfo(versions: v, latest: (d["dist-tags"] as? [String: Any])?["latest"] as? String)
+        }
+        // Asked for `versions` alone: an array, or a bare string when there's one.
+        if let v = (obj as? [String]) ?? (obj as? String).map({ [$0] }) { return NPMPackageInfo(versions: v, latest: nil) }
+        return nil
+    }
+}
+
+public enum NPMError {
+    /// A short reason from a failed npx/npm run's stderr, e.g. "No matching version found for
+    /// ccusage@9.0.0. (ETARGET)". npm prints its log path last, so the last line alone says nothing.
+    public static func summary(_ stderr: String) -> String? {
+        let lines = stderr.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        var code: String?
+        var message: String?
+        for line in lines {
+            guard let body = stripPrefix(line) else { continue }
+            if body.hasPrefix("code ") { code = code ?? String(body.dropFirst(5)); continue }
+            if message == nil, !isNoise(body) { message = dropHeading(body) }
+        }
+        if message == nil, code == nil {
+            // Not npm's format: the last line that isn't npm's log pointer.
+            return lines.last { !$0.isEmpty && !isNoise(stripPrefix($0) ?? $0) }.map { String($0.prefix(200)) }
+        }
+        let text = [message, code.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ")
+        return String(text.prefix(200))
+    }
+
+    private static func stripPrefix(_ line: String) -> String? {
+        for p in ["npm error ", "npm ERR! "] where line.hasPrefix(p) {
+            return String(line.dropFirst(p.count)).trimmingCharacters(in: .whitespaces)
+        }
+        return nil
+    }
+
+    private static func isNoise(_ body: String) -> Bool {
+        let skip = ["A complete log of this run", "Log files were not written", "In most cases", "syscall ", "errno ", "path "]
+        return body.isEmpty || skip.contains { dropHeading(body).hasPrefix($0) || body.hasPrefix($0) }
+    }
+
+    /// npm tags lines with a lowercase or numeric heading ("notarget No matching…", "403 403 Forbidden…").
+    private static func dropHeading(_ body: String) -> String {
+        let parts = body.split(separator: " ", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let next = parts[1].first, next.isUppercase || next.isNumber,
+              parts[0].allSatisfy({ $0.isLowercase || $0.isNumber }) else { return body }
+        return parts[1]
     }
 }
 
@@ -115,6 +171,13 @@ public enum Version {
     /// "20261114.2.0" (npm form) -> "20261114.2" (the form people see).
     public static func display(_ v: String) -> String {
         v.hasSuffix(".0") && v.split(separator: ".").count == 3 ? String(v.dropLast(2)) : v
+    }
+
+    /// The newest stable version in `versions` above `current`, or nil if there's none.
+    /// "20261125.2.0" (npm) and "20261125.2" (app) count as the same version.
+    public static func newestUpdate(in versions: [String], current: String) -> String? {
+        versions.compactMap(CCUsageVersion.validated).filter { !$0.contains("-") && isNewer($0, than: current) }
+            .max { isNewer($1, than: $0) }
     }
 
     /// Numeric part-by-part compare of date-based versions like 20261114.0.0.

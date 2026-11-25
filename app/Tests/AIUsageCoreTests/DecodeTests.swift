@@ -33,14 +33,63 @@ final class DecodeTests: XCTestCase {
         XCTAssertNil(CCUsageVersion.validated("1.2.3\n"))
     }
     func testCCUsageCandidates() {
-        XCTAssertEqual(CCUsageVersion.list(Data(#"["1.0.0","2.0.0"]"#.utf8)), ["1.0.0", "2.0.0"])
-        XCTAssertEqual(CCUsageVersion.list(Data(#""1.0.0""#.utf8)), ["1.0.0"])
-        XCTAssertEqual(CCUsageVersion.list(Data("npm ERR! nope".utf8)), [])
+        // Real `npm view ccusage versions dist-tags --json` shape.
+        let json = Data(#"{"versions":["20.0.51","20.1.0","20.1.1","20.1.2"],"dist-tags":{"latest":"20.1.2"}}"#.utf8)
+        XCTAssertEqual(NPMPackageInfo.parse(json), NPMPackageInfo(versions: ["20.0.51", "20.1.0", "20.1.1", "20.1.2"], latest: "20.1.2"))
+        XCTAssertEqual(NPMPackageInfo.parse(Data(#"["1.0.0","2.0.0"]"#.utf8)), NPMPackageInfo(versions: ["1.0.0", "2.0.0"], latest: nil))
+        XCTAssertEqual(NPMPackageInfo.parse(Data(#""1.0.0""#.utf8))?.versions, ["1.0.0"])
+        XCTAssertNil(NPMPackageInfo.parse(Data("npm error nope".utf8)))
         let all = ["20.0.9", "20.1.0-beta.1", "20.0.51", "20.1.2", "20.1.0", "20.1.1", "file:../evil"]
-        // Newest (20.1.2) is @latest; the beta and the bad spec are skipped; numeric, not text, order.
-        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: [], limit: 3), ["20.1.1", "20.1.0", "20.0.51"])
-        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: ["20.1.1"], limit: 2), ["20.1.0", "20.0.51"])
-        XCTAssertEqual(CCUsageVersion.candidates(["1.0.0"], excluding: [], limit: 3), [])
+        // `latest` (20.1.2) is excluded by the caller; betas and bad specs skipped; numeric, not text, order.
+        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: ["20.1.2"], limit: 3), ["20.1.1", "20.1.0", "20.0.51"])
+        XCTAssertEqual(CCUsageVersion.candidates(all, excluding: ["20.1.2", "20.1.1"], limit: 2), ["20.1.0", "20.0.51"])
+        // Corporate filter: the list stops at 20.1.1 while latest says 20.1.2, so 20.1.1 is tried first.
+        XCTAssertEqual(CCUsageVersion.candidates(["20.0.51", "20.1.0", "20.1.1"], excluding: ["20.1.2"], limit: 3),
+                       ["20.1.1", "20.1.0", "20.0.51"])
+        XCTAssertEqual(CCUsageVersion.candidates([], excluding: [], limit: 3), [])
+    }
+    func testNewestUpdate() {
+        // Real list, including the stray pre-release.
+        let all = ["0.0.0-stage", "20261114.3.0", "20261114.4.0", "20261114.5.0", "20261125.0.0", "20261125.1.0", "20261125.2.0"]
+        XCTAssertEqual(Version.newestUpdate(in: all, current: "20261114.5"), "20261125.2.0")
+        XCTAssertNil(Version.newestUpdate(in: all, current: "20261125.2"))
+        // Corporate filter hides today's releases: offer the newest it allows, or nothing.
+        XCTAssertEqual(Version.newestUpdate(in: ["20261114.5.0", "20261125.0.0"], current: "20261114.5"), "20261125.0.0")
+        XCTAssertNil(Version.newestUpdate(in: ["20261114.3.0", "20261114.4.0", "20261114.5.0"], current: "20261114.5"))
+        XCTAssertNil(Version.newestUpdate(in: ["99999999.0.0-beta", "github:evil/x"], current: "1"))
+    }
+    func testNPMErrorSummary() {
+        // Real npm 11 output (a version that doesn't exist).
+        let etarget = """
+        npm error code ETARGET
+        npm error notarget No matching version found for ccusage@999.0.0.
+        npm error notarget In most cases you or one of your dependencies are requesting a package version that doesn't exist.
+        npm error A complete log of this run can be found in: /Users/x/.npm/_logs/2026-11-25T06_50_55_159Z-debug-0.log
+        """
+        XCTAssertEqual(NPMError.summary(etarget), "No matching version found for ccusage@999.0.0. (ETARGET)")
+        // A registry or security policy blocking the package (corporate npm proxies).
+        let e403 = """
+        npm error code E403
+        npm error 403 403 Forbidden - GET https://npm.corp.example/ccusage - blocked by policy
+        npm error 403 In most cases, you or one of your dependencies are requesting
+        npm error A complete log of this run can be found in: /Users/x/.npm/_logs/a.log
+        """
+        XCTAssertEqual(NPMError.summary(e403), "403 Forbidden - GET https://npm.corp.example/ccusage - blocked by policy (E403)")
+        let offline = """
+        npm error code ECONNREFUSED
+        npm error syscall connect
+        npm error errno ECONNREFUSED
+        npm error FetchError: request to https://registry.npmjs.org/ccusage failed, reason: connect ECONNREFUSED
+        npm error A complete log of this run can be found in: /Users/x/a.log
+        """
+        XCTAssertEqual(NPMError.summary(offline),
+                       "FetchError: request to https://registry.npmjs.org/ccusage failed, reason: connect ECONNREFUSED (ECONNREFUSED)")
+        XCTAssertEqual(NPMError.summary("npm ERR! code E404\nnpm ERR! 404 Not Found - GET https://x/ccusage\n"),
+                       "Not Found - GET https://x/ccusage (E404)")
+        XCTAssertEqual(NPMError.summary("npm error code E401\nnpm error A complete log of this run can be found in: a.log"), "(E401)")
+        // Not npm's format: ccusage itself failing.
+        XCTAssertEqual(NPMError.summary("Error: no data\n\n"), "Error: no data")
+        XCTAssertNil(NPMError.summary("\n"))
     }
     func testAutoUpdateBackoff() {
         let h: TimeInterval = 3_600

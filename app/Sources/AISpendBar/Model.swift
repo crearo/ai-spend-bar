@@ -237,13 +237,17 @@ final class UsageModel: ObservableObject {
 
     // MARK: Update check (at most once a day)
 
+    /// The version to update to, as this Mac's npm sees it. (Older builds kept the public registry's
+    /// `latest` under "latestVersion", which a corporate npm filter may refuse, so it's a new key.)
+    private static let updateTargetKey = "updateTarget"
+
     /// `manual` is the "Check for updates" button: it skips the once-a-day limit and reports back.
     func checkForUpdate(manual: Bool = false) {
         guard !isSample else { return }
         let d = UserDefaults.standard
         let current = Self.appVersion
-        if !manual, let latest = d.string(forKey: "latestVersion"), Version.isNewer(latest, than: current) {
-            updateAvailable = latest
+        if !manual, let target = d.string(forKey: Self.updateTargetKey), Version.isNewer(target, than: current) {
+            updateAvailable = target
             maybeAutoUpdate()
         }
         if manual {
@@ -253,25 +257,25 @@ final class UsageModel: ObservableObject {
             return
         }
         d.set(Date(), forKey: "lastUpdateCheck")
+        let cachedEnv = env
         Task {
-            guard let latest = await Self.fetchLatestVersion() else {
+            // Ask this Mac's npm, not the public registry: its list is what npx will actually
+            // install here. A corporate filter that holds back new releases leaves them out.
+            let (env, info) = await Task.detached(priority: .utility) { () -> ([String: String], NPMPackageInfo?) in
+                let env = cachedEnv ?? Shell.userEnvironment()
+                return (env, Shell.packageInfo("ai-spend-bar", env: env))
+            }.value
+            self.env = env
+            guard let info else {
                 if manual { manualCheck = .failed }
                 return
             }
-            d.set(latest, forKey: "latestVersion")
-            updateAvailable = Version.isNewer(latest, than: current) ? latest : nil
-            if manual { manualCheck = updateAvailable == nil ? .upToDate : .idle }
+            let target = Version.newestUpdate(in: info.versions, current: current)
+            if let target { d.set(target, forKey: Self.updateTargetKey) } else { d.removeObject(forKey: Self.updateTargetKey) }
+            updateAvailable = target
+            if manual { manualCheck = target == nil ? .upToDate : .idle }
             maybeAutoUpdate()
         }
-    }
-
-    private static func fetchLatestVersion() async -> String? {
-        guard let url = URL(string: "https://registry.npmjs.org/ai-spend-bar/latest") else { return nil }
-        // Straight from npm, not a cached answer, so a release from minutes ago shows up.
-        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return obj["version"] as? String
     }
 
     // MARK: Updating
@@ -292,15 +296,18 @@ final class UsageModel: ObservableObject {
         installUpdate()
     }
 
-    /// Runs `npx ai-spend-bar@latest` (fresh from npm, not a cached version list), which quits this app, replaces it in ~/Applications and reopens it.
+    /// Runs `npx ai-spend-bar@<version>` (fresh from npm, not a cached version list), which quits this
+    /// app, replaces it in ~/Applications and reopens it. The exact version, not `@latest`: where npm
+    /// holds back new releases, `latest` can name one it won't install.
     func installUpdate() {
         guard !isSample, !isUpdating, Self.isInstalledCopy else { return }
         isUpdating = true
+        let spec = "ai-spend-bar@" + (updateAvailable.flatMap(CCUsageVersion.validated) ?? "latest")
         let cachedEnv = env
         let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/AI Spend Bar/update.log")
         Task.detached {
             let env = cachedEnv ?? Shell.userEnvironment()
-            let started = Shell.launch("npx", ["--yes", "--prefer-online", "ai-spend-bar@latest"], env: env, log: log) {
+            let started = Shell.launch("npx", ["--yes", "--prefer-online", spec], env: env, log: log) {
                 // Still running after the installer finished means it failed; let the user retry.
                 Task { @MainActor in self.isUpdating = false }
             }
@@ -317,7 +324,7 @@ struct ShellError: Error {
 
 /// Runs `ccusage@latest`; if that fails (say the registry can't resolve the newest release),
 /// retries with the last version that worked so usage keeps updating. With no such version
-/// (a fresh install) or if it fails too, tries a few older releases, newest first.
+/// (a fresh install) or if it fails too, tries a few other releases this Mac's npm lists, newest first.
 enum CCUsage {
     struct Fetched: Sendable {
         let data: Data
@@ -346,8 +353,10 @@ enum CCUsage {
             }
         }
         guard searchOlder else { return .failure(e) }
-        let tried: Set<String> = lastGood.map { [$0] } ?? []
-        for v in CCUsageVersion.candidates(publishedVersions(env: env), excluding: tried, limit: olderReleasesToTry) {
+        let info = Shell.packageInfo("ccusage", env: env)
+        // `latest` just failed; everything else this Mac's npm lists is fair game, newest first.
+        let tried = Set([lastGood, info?.latest].compactMap { $0 })
+        for v in CCUsageVersion.candidates(info?.versions ?? [], excluding: tried, limit: olderReleasesToTry) {
             switch Shell.runCCUsage(version: v, args, env: env, timeout: 90) {
             case .success(let data): return .success(Fetched(data: data, fallbackVersion: v, foundBySearch: true))
             case .failure(let err) where err.timedOut: return .failure(e)
@@ -355,14 +364,6 @@ enum CCUsage {
             }
         }
         return .failure(e)
-    }
-
-    /// Every published ccusage version, from the same registry npx uses. Empty if npm can't say.
-    static func publishedVersions(env: [String: String]) -> [String] {
-        guard let npm = Shell.findExecutable("npm", path: env["PATH"] ?? ""),
-              case .success(let out) = Shell.run(npm, ["view", "ccusage", "versions", "--json"], env: env, timeout: 30)
-        else { return [] }
-        return CCUsageVersion.list(out)
     }
 
     static func latestVersion(env: [String: String]) -> String? {
@@ -423,6 +424,16 @@ enum Shell {
         return true
     }
 
+    /// `npm view <name> versions dist-tags`, through this Mac's npm config (registry, proxies,
+    /// filters), so it lists what npx can install here. Nil if npm isn't there or can't say.
+    static func packageInfo(_ name: String, env: [String: String]) -> NPMPackageInfo? {
+        guard let npm = findExecutable("npm", path: env["PATH"] ?? ""),
+              case .success(let out) = run(npm, ["view", name, "versions", "dist-tags", "--json", "--prefer-online"],
+                                           env: env, timeout: 30)
+        else { return nil }
+        return NPMPackageInfo.parse(out)
+    }
+
     static func findExecutable(_ name: String, path: String) -> String? {
         path.split(separator: ":").map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
@@ -464,9 +475,8 @@ enum Shell {
             return .failure(ShellError(message: "ccusage took longer than \(Int(timeout))s and was stopped.", timedOut: true))
         }
         guard p.terminationStatus == 0 else {
-            let msg = String(data: errData, encoding: .utf8)?
-                .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.last
-            return .failure(ShellError(message: "ccusage failed: " + (msg.map { String($0.prefix(200)) } ?? "exit \(p.terminationStatus)")))
+            let msg = String(data: errData, encoding: .utf8).flatMap(NPMError.summary)
+            return .failure(ShellError(message: "ccusage failed: " + (msg ?? "exit \(p.terminationStatus)")))
         }
         return .success(data)
     }

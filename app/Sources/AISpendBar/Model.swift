@@ -13,6 +13,8 @@ final class UsageModel: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var isRefreshing = false
     @Published private(set) var error: String?
+    /// The older ccusage the last refresh fell back to because `@latest` failed.
+    @Published private(set) var fallbackVersion: String?
     @Published private(set) var updateAvailable: String?
     @Published var range: Range = .today
     @Published var excluded: Set<String> {
@@ -28,6 +30,8 @@ final class UsageModel: ObservableObject {
     private var env: [String: String]?
     private var isSample = false
     private var timer: Timer?
+    private static let lastGoodVersionKey = "ccusageLastGoodVersion"
+    private static let lastGoodVersionCheckedKey = "ccusageLastGoodVersionCheckedAt"
     private static let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("com.verycuteapps.ai-usage-bar/last.json")
 
@@ -163,27 +167,40 @@ final class UsageModel: ObservableObject {
         let cachedEnv = env
         let since = Self.yyyymmdd(Calendar.current.date(byAdding: .day, value: -34, to: Date())!)
         let until = Self.yyyymmdd(Date())
+        let d = UserDefaults.standard
+        let lastGood = d.string(forKey: Self.lastGoodVersionKey).flatMap(CCUsageVersion.validated)
+        let shouldCheckVersion = (d.object(forKey: Self.lastGoodVersionCheckedKey) as? Date)
+            .map { Date().timeIntervalSince($0) >= 86_400 } ?? true
         Task.detached(priority: .utility) {
             let env = cachedEnv ?? Shell.userEnvironment()
-            let result = Shell.runCCUsage(env: env, since: since, until: until)
+            let result = CCUsage.fetch(env: env, since: since, until: until, lastGood: lastGood)
             await MainActor.run {
                 self.env = env
                 self.isRefreshing = false
                 switch result {
-                case .success(let data):
+                case .success(let fetched):
                     do {
-                        let r = try UsageReport.decode(data)
+                        let r = try UsageReport.decode(fetched.data)
                         self.costs = r.costsByDay
                         self.lastUpdated = Date()
                         self.error = nil
+                        self.fallbackVersion = fetched.fallbackVersion
                         try? FileManager.default.createDirectory(at: Self.cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                        try? data.write(to: Self.cacheURL, options: .atomic)
+                        try? fetched.data.write(to: Self.cacheURL, options: .atomic)
                     } catch {
                         self.error = "Couldn't read ccusage output."
                     }
                 case .failure(let e):
                     self.error = e.message
                 }
+            }
+            // After a good `@latest` run, note which version that was (daily), so a later failure
+            // of `@latest` has something to fall back to.
+            guard shouldCheckVersion, case .success(let fetched) = result, fetched.fallbackVersion == nil else { return }
+            let version = CCUsage.latestVersion(env: env)
+            await MainActor.run {
+                UserDefaults.standard.set(Date(), forKey: Self.lastGoodVersionCheckedKey)
+                if let version { UserDefaults.standard.set(version, forKey: Self.lastGoodVersionKey) }
             }
         }
     }
@@ -259,7 +276,38 @@ final class UsageModel: ObservableObject {
 
 }
 
-struct ShellError: Error { let message: String }
+struct ShellError: Error {
+    let message: String
+    var timedOut = false
+}
+
+/// Runs `ccusage@latest`; if that fails (say the registry can't resolve the newest release),
+/// retries with the last version that worked so usage keeps updating.
+enum CCUsage {
+    struct Fetched: Sendable {
+        let data: Data
+        let fallbackVersion: String?
+    }
+
+    static func fetch(env: [String: String], since: String, until: String, lastGood: String?) -> Result<Fetched, ShellError> {
+        let args = ["daily", "--json", "--by-agent", "--since", since, "--until", until]
+        switch Shell.runCCUsage(version: "latest", args, env: env, timeout: 90) {
+        case .success(let data):
+            return .success(Fetched(data: data, fallbackVersion: nil))
+        case .failure(let e):
+            // A timeout would likely repeat, and doubling the wait helps nobody.
+            guard !e.timedOut, let v = lastGood,
+                  case .success(let data) = Shell.runCCUsage(version: v, args, env: env, timeout: 90)
+            else { return .failure(e) }
+            return .success(Fetched(data: data, fallbackVersion: v))
+        }
+    }
+
+    static func latestVersion(env: [String: String]) -> String? {
+        guard case .success(let out) = Shell.runCCUsage(version: "latest", ["--version"], env: env, timeout: 60) else { return nil }
+        return String(data: out, encoding: .utf8).flatMap(CCUsageVersion.parse)
+    }
+}
 
 enum Shell {
     /// Environment with the user's login-shell PATH plus Homebrew paths, and CLAUDE_CONFIG_DIR.
@@ -317,12 +365,15 @@ enum Shell {
         path.split(separator: ":").map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static func runCCUsage(env: [String: String], since: String, until: String) -> Result<Data, ShellError> {
+    /// `version` is "latest" or a plain semver from `CCUsageVersion.validated`. A pinned version
+    /// never changes, so npx uses its cached copy rather than asking the registry again.
+    static func runCCUsage(version: String, _ args: [String], env: [String: String],
+                           timeout: TimeInterval) -> Result<Data, ShellError> {
         guard let npx = findExecutable("npx", path: env["PATH"] ?? "") else {
             return .failure(ShellError(message: "Node.js is needed. Install it, then run npx ai-spend-bar again."))
         }
-        return run(npx, ["--yes", "ccusage@latest", "daily", "--json", "--by-agent", "--since", since, "--until", until],
-                   env: env, timeout: 90)
+        let offline = version == "latest" ? [] : ["--prefer-offline"]
+        return run(npx, ["--yes"] + offline + ["ccusage@\(version)"] + args, env: env, timeout: timeout)
     }
 
     static func run(_ exe: String, _ args: [String], env: [String: String], timeout: TimeInterval) -> Result<Data, ShellError> {
@@ -347,7 +398,9 @@ enum Shell {
         p.waitUntilExit()
         killer.cancel()
 
-        if timedOut { return .failure(ShellError(message: "ccusage took longer than \(Int(timeout))s and was stopped.")) }
+        if timedOut {
+            return .failure(ShellError(message: "ccusage took longer than \(Int(timeout))s and was stopped.", timedOut: true))
+        }
         guard p.terminationStatus == 0 else {
             let msg = String(data: errData, encoding: .utf8)?
                 .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.last

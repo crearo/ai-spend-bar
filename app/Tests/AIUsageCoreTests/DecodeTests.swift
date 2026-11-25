@@ -18,6 +18,20 @@ final class DecodeTests: XCTestCase {
         XCTAssertEqual(r.costsByDay["2026-11-01"]?["codex"], 3)
         XCTAssertEqual(try UsageReport.decode(Data("{}".utf8)).daily.count, 0)
     }
+    func testCCUsageVersion() {
+        XCTAssertEqual(CCUsageVersion.parse("ccusage 20.0.51\n"), "20.0.51")
+        XCTAssertEqual(CCUsageVersion.parse("ERROR: noise\nccusage 21.0.0-beta.2"), "21.0.0-beta.2")
+        XCTAssertNil(CCUsageVersion.parse(""))
+        XCTAssertNil(CCUsageVersion.parse("ccusage latest"))
+        XCTAssertNil(CCUsageVersion.parse("ccusage file:../evil"))
+        XCTAssertNil(CCUsageVersion.parse("ccusage 1.2.3 extra"))
+        XCTAssertNil(CCUsageVersion.parse("other 1.2.3"))
+        XCTAssertNil(CCUsageVersion.parse("ccusage -..."))
+        XCTAssertEqual(CCUsageVersion.validated("20.0.51"), "20.0.51")
+        XCTAssertNil(CCUsageVersion.validated("github:evil/ccusage"))
+        XCTAssertNil(CCUsageVersion.validated("1.2.3\n../evil"))
+        XCTAssertNil(CCUsageVersion.validated("1.2.3\n"))
+    }
     func testVersion() {
         XCTAssertTrue(Version.isNewer("20261115.0.0", than: "20261114.3.0"))
         XCTAssertTrue(Version.isNewer("20261114.1.0", than: "20261114.0.9"))

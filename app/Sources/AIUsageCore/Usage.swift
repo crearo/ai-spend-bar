@@ -64,6 +64,24 @@ public enum Tools {
     }
 }
 
+public enum CCUsageVersion {
+    /// The version from `ccusage --version` output ("ccusage 20.0.51"). npx may print
+    /// noise first, so the last matching line wins.
+    public static func parse(_ output: String) -> String? {
+        for line in output.split(whereSeparator: \.isNewline).reversed() {
+            let parts = line.split(separator: " ")
+            if parts.count == 2, parts[0] == "ccusage", let v = validated(String(parts[1])) { return v }
+        }
+        return nil
+    }
+
+    /// `version` if it's plain semver. It's passed to npx as `ccusage@<version>`, where anything
+    /// else (a path, URL or git spec) could install something other than ccusage from npm.
+    public static func validated(_ version: String) -> String? {
+        version.range(of: #"\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\z"#, options: .regularExpression) != nil ? version : nil
+    }
+}
+
 public enum Version {
     /// "20261114.2.0" (npm form) -> "20261114.2" (the form people see).
     public static func display(_ v: String) -> String {

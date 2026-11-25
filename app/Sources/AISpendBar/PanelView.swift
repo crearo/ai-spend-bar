@@ -56,6 +56,9 @@ struct PanelView: View {
 
             if model.hasData, let e = model.error {
                 Text("Last refresh failed: \(e)").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            } else if let v = model.fallbackVersion {
+                Text("Using ccusage \(v) because the latest version failed.")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
 
             Divider()

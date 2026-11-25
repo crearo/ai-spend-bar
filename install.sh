@@ -49,12 +49,21 @@ src="${BASH_SOURCE[0]:-}"
 [[ -n "$src" && -f "$src" ]] && SCRIPT_DIR="$(cd "$(dirname "$src")" && pwd -P)"
 ZIP="${SCRIPT_DIR:+$SCRIPT_DIR/dist/AI-Spend-Bar.zip}"
 
+# -a: pgrep skips its own ancestors by default, and when the app's Update button runs this
+# installer, the app is one of them. Without -a the app was never quit: its files were replaced
+# under it, `open` just raised the old copy, and it kept offering the same update.
+app_running() { pgrep -a -f "/Contents/MacOS/AI(Spend|Usage)Bar" >/dev/null 2>&1; }
+
 quit_app() {
-  if pgrep -f "/Contents/MacOS/AI(Spend|Usage)Bar" >/dev/null 2>&1; then
-    info "Quitting the running app"
-    runq osascript -e "quit app id \"$APP_ID\""
-    (( DRY_RUN )) || sleep 1
-  fi
+  app_running || return 0
+  info "Quitting the running app"
+  runq osascript -e "quit app id \"$APP_ID\""
+  (( DRY_RUN )) && return 0
+  # Wait for it to exit (up to 10s) so `open` later starts the new copy, not the old one.
+  for _ in {1..20}; do app_running || return 0; sleep 0.5; done
+  info "It didn't quit; stopping it"
+  runq pkill -a -f "/Contents/MacOS/AI(Spend|Usage)Bar"
+  sleep 1
 }
 
 # Is this directory a copy of our old swiftbar plugin folder?

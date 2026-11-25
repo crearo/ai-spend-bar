@@ -1,6 +1,6 @@
 {
   "name": "ai-spend-bar",
-  "version": "20261125.0.0",
+  "version": "20261125.1.0",
   "description": "Daily AI coding spend (Claude Code, Codex, Gemini CLI and more) in your Mac's menu bar",
   "license": "MIT",
   "os": [

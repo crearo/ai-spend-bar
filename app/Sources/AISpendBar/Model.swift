@@ -16,6 +16,9 @@ final class UsageModel: ObservableObject {
     /// The older ccusage the last refresh fell back to because `@latest` failed.
     @Published private(set) var fallbackVersion: String?
     @Published private(set) var updateAvailable: String?
+    /// Result of the last "Check for updates" click, shown in settings.
+    @Published private(set) var manualCheck: ManualCheck = .idle
+    enum ManualCheck: Equatable { case idle, checking, upToDate, failed }
     @Published var range: Range = .today
     @Published var excluded: Set<String> {
         didSet { UserDefaults.standard.set(Array(excluded).sorted(), forKey: "excludedTools") }
@@ -65,7 +68,7 @@ final class UsageModel: ObservableObject {
         checkForUpdate()
     }
 
-    private static var appVersion: String {
+    static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     }
 
@@ -234,25 +237,41 @@ final class UsageModel: ObservableObject {
 
     // MARK: Update check (at most once a day)
 
-    func checkForUpdate() {
+    /// `manual` is the "Check for updates" button: it skips the once-a-day limit and reports back.
+    func checkForUpdate(manual: Bool = false) {
         guard !isSample else { return }
         let d = UserDefaults.standard
         let current = Self.appVersion
-        if let latest = d.string(forKey: "latestVersion"), Version.isNewer(latest, than: current) {
+        if !manual, let latest = d.string(forKey: "latestVersion"), Version.isNewer(latest, than: current) {
             updateAvailable = latest
             maybeAutoUpdate()
         }
-        if let last = d.object(forKey: "lastUpdateCheck") as? Date, Date().timeIntervalSince(last) < 86_400 { return }
+        if manual {
+            guard manualCheck != .checking else { return }
+            manualCheck = .checking
+        } else if let last = d.object(forKey: "lastUpdateCheck") as? Date, Date().timeIntervalSince(last) < 86_400 {
+            return
+        }
         d.set(Date(), forKey: "lastUpdateCheck")
         Task {
-            guard let url = URL(string: "https://registry.npmjs.org/ai-spend-bar/latest"),
-                  let (data, _) = try? await URLSession.shared.data(from: url),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let latest = obj["version"] as? String else { return }
+            guard let latest = await Self.fetchLatestVersion() else {
+                if manual { manualCheck = .failed }
+                return
+            }
             d.set(latest, forKey: "latestVersion")
             updateAvailable = Version.isNewer(latest, than: current) ? latest : nil
+            if manual { manualCheck = updateAvailable == nil ? .upToDate : .idle }
             maybeAutoUpdate()
         }
+    }
+
+    private static func fetchLatestVersion() async -> String? {
+        guard let url = URL(string: "https://registry.npmjs.org/ai-spend-bar/latest") else { return nil }
+        // Straight from npm, not a cached answer, so a release from minutes ago shows up.
+        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj["version"] as? String
     }
 
     // MARK: Updating

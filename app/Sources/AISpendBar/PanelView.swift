@@ -188,6 +188,16 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 6) {
         if showSettings {
             Toggle("Install updates automatically", isOn: $model.autoUpdate)
+            HStack(spacing: 6) {
+                Button("Check for updates") { model.checkForUpdate(manual: true) }
+                    .disabled(model.manualCheck == .checking || model.isUpdating)
+                switch model.manualCheck {
+                case .checking: ProgressView().controlSize(.mini); Text("Checking…")
+                case .upToDate: Text("You're up to date (\(Version.display(UsageModel.appVersion)))")
+                case .failed: Text("Couldn't reach npm. Try again later.")
+                case .idle: EmptyView()
+                }
+            }
         }
         HStack {
             if model.isRefreshing {

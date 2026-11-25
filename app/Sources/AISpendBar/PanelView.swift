@@ -7,6 +7,7 @@ struct PanelView: View {
     @EnvironmentObject var model: UsageModel
     @State private var selectedDay: String?
     @State private var showSettings = false
+    @State private var rateText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,7 +41,9 @@ struct PanelView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(money(model.total(model.range)))
                         .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .help("API value of your usage, estimated by ccusage. Subscriptions are billed at a flat price.")
+                        .help(model.useInternalCodexPricing && model.tools.contains("codex")
+                              ? "Codex at your $\(rateString(model.codexDollarsPerCredit)) per credit; other tools at API value, estimated by ccusage."
+                              : "API value of your usage, estimated by ccusage. Subscriptions are billed at a flat price.")
                     // One tool: name it here instead of repeating the same amount in a row below.
                     Text(tools.count == 1 ? Tools.name(tools[0]) : tools.isEmpty ? "No usage in the last 30 days" : "All tools")
                         .font(.callout).foregroundStyle(.secondary)
@@ -188,6 +191,7 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 6) {
         if showSettings {
             Toggle("Install updates automatically", isOn: $model.autoUpdate)
+            codexPricingSettings
             HStack(spacing: 6) {
                 Button("Check for updates") { model.checkForUpdate(manual: true) }
                     .disabled(model.manualCheck == .checking || model.isUpdating)
@@ -216,6 +220,42 @@ struct PanelView: View {
             .help("Counts AI usage on this Mac only. Other computers aren't included.")
         }
         .font(.caption).foregroundStyle(.secondary).controlSize(.small)
+    }
+
+    /// Off: Codex at public API prices. On: at the $ per credit typed here (from the company's
+    /// OpenAI agreement; $0.04 is the public price).
+    @ViewBuilder private var codexPricingSettings: some View {
+        Toggle("Use internal Codex pricing", isOn: $model.useInternalCodexPricing)
+            .help("Price Codex at your company's $ per credit instead of public API prices.")
+        if model.useInternalCodexPricing {
+            let typed = CodexPricing.parseRate(rateText)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("$ per credit")
+                    TextField("0.04", text: $rateText)
+                        .textFieldStyle(.roundedBorder).frame(width: 70).monospacedDigit()
+                        .onChange(of: rateText) { text in
+                            if let v = CodexPricing.parseRate(text) { model.codexDollarsPerCredit = v }
+                        }
+                }
+                if !rateText.isEmpty && typed == nil {
+                    Text("Enter a price like 0.03 (under $10, up to 4 decimals).").foregroundStyle(.red)
+                } else {
+                    Text("$0.04 is the public API price. Ask your OpenAI admin for your contract rate.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                let credits = model.codexCredits(range: model.range)
+                Text("\(model.range.rawValue): \(credits.formatted(.number.precision(.fractionLength(0)))) credits → "
+                     + money(credits * model.codexDollarsPerCredit))
+                    .monospacedDigit()
+            }
+            .padding(.leading, 18)
+            .onAppear { if rateText.isEmpty { rateText = rateString(model.codexDollarsPerCredit) } }
+        }
+    }
+
+    private func rateString(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(2...4)).grouping(.never))
     }
 
     private func money(_ v: Double) -> String { String(format: "$%.2f", v) }

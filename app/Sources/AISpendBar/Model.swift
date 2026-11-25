@@ -9,7 +9,9 @@ enum Range: String, CaseIterable, Identifiable {
 
 @MainActor
 final class UsageModel: ObservableObject {
-    @Published private(set) var costs: [String: [String: Double]] = [:]  // day -> tool -> $
+    /// day -> tool -> $, at the chosen prices. `apiCosts` is ccusage's figure at public API prices.
+    @Published private(set) var costs: [String: [String: Double]] = [:]
+    private var apiCosts: [String: [String: Double]] = [:] { didSet { reprice() } }
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var isRefreshing = false
     @Published private(set) var error: String?
@@ -30,6 +32,26 @@ final class UsageModel: ObservableObject {
         didSet { UserDefaults.standard.set(autoUpdate, forKey: "autoUpdate"); if autoUpdate { maybeAutoUpdate() } }
     }
 
+    /// Settings: Codex at the company's own $ per credit instead of public API prices.
+    @Published var useInternalCodexPricing = UserDefaults.standard.bool(forKey: "useInternalCodexPricing") {
+        didSet { UserDefaults.standard.set(useInternalCodexPricing, forKey: "useInternalCodexPricing"); reprice() }
+    }
+    @Published var codexDollarsPerCredit = UserDefaults.standard.object(forKey: "codexDollarsPerCredit") as? Double
+        ?? CodexPricing.publicDollarsPerCredit {
+        didSet { UserDefaults.standard.set(codexDollarsPerCredit, forKey: "codexDollarsPerCredit"); reprice() }
+    }
+
+    var codexPricing: CodexPricing {
+        CodexPricing(dollarsPerCredit: useInternalCodexPricing ? codexDollarsPerCredit : nil)
+    }
+
+    private func reprice() { costs = codexPricing.apply(apiCosts) }
+
+    /// Codex credits used in a range (from the public API value), for the settings preview.
+    func codexCredits(range r: Range) -> Double {
+        CodexPricing.credits(apiCost: days(in: r).reduce(0) { $0 + (apiCosts[$1]?["codex"] ?? 0) })
+    }
+
     private var env: [String: String]?
     private var isSample = false
     private var timer: Timer?
@@ -42,7 +64,9 @@ final class UsageModel: ObservableObject {
     /// Sample data for screenshots (`--snapshot`): no refresh, no login item, no network.
     init(sample costs: [String: [String: Double]]) {
         excluded = []
-        self.costs = costs
+        apiCosts = costs
+        useInternalCodexPricing = false  // public prices in screenshots, whatever this Mac has set
+        reprice()  // didSet doesn't run in init
         lastUpdated = Date().addingTimeInterval(-25)
         loginStatus = .enabled
         isSample = true
@@ -51,9 +75,10 @@ final class UsageModel: ObservableObject {
     init() {
         excluded = Set(UserDefaults.standard.stringArray(forKey: "excludedTools") ?? [])
         if let data = try? Data(contentsOf: Self.cacheURL), let r = try? UsageReport.decode(data) {
-            costs = r.costsByDay
+            apiCosts = r.costsByDay
             lastUpdated = (try? Self.cacheURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         }
+        reprice()  // didSet doesn't run in init
         if !UserDefaults.standard.bool(forKey: "didAutoRegisterLogin") {
             UserDefaults.standard.set(true, forKey: "didAutoRegisterLogin")
             try? SMAppService.mainApp.register()
@@ -192,7 +217,7 @@ final class UsageModel: ObservableObject {
                     }
                     do {
                         let r = try UsageReport.decode(fetched.data)
-                        self.costs = r.costsByDay
+                        self.apiCosts = r.costsByDay
                         self.lastUpdated = Date()
                         self.error = nil
                         self.fallbackVersion = fetched.fallbackVersion

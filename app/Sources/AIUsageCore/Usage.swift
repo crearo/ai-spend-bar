@@ -49,6 +49,44 @@ public struct UsageReport: Decodable, Sendable {
     }
 }
 
+/// Codex at a company's own credit price instead of public API prices. OpenAI's Codex rate card
+/// prices every model at exactly 25 credits per API dollar, so one credit is worth $0.04 of API
+/// value, and ccusage's API cost converts straight to credits without a per-model table.
+public struct CodexPricing: Equatable, Sendable {
+    public static let publicDollarsPerCredit = 0.04
+    /// Nil means public API prices.
+    public var dollarsPerCredit: Double?
+
+    public init(dollarsPerCredit: Double?) { self.dollarsPerCredit = dollarsPerCredit }
+
+    public static func credits(apiCost: Double) -> Double { apiCost / publicDollarsPerCredit }
+
+    public func cost(apiCost: Double) -> Double {
+        guard let rate = dollarsPerCredit else { return apiCost }
+        return Self.credits(apiCost: apiCost) * rate
+    }
+
+    /// The same day -> tool -> $ map with Codex at this price; other tools unchanged.
+    public func apply(_ costs: [String: [String: Double]]) -> [String: [String: Double]] {
+        guard dollarsPerCredit != nil else { return costs }
+        return costs.mapValues { tools in
+            var m = tools
+            if let c = m["codex"] { m["codex"] = cost(apiCost: c) }
+            return m
+        }
+    }
+
+    /// What someone typed as a $ per credit ("0.03", "$0.025", " 0,03 "), or nil if it isn't a
+    /// positive price under $10 with at most 4 decimals.
+    public static func parseRate(_ text: String) -> Double? {
+        var s = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        if s.hasPrefix("$") { s = String(s.dropFirst()).trimmingCharacters(in: .whitespaces) }
+        guard s.range(of: #"\A[0-9]*\.?[0-9]{0,4}\z"#, options: .regularExpression) != nil,
+              let v = Double(s), v > 0, v < 10 else { return nil }
+        return v
+    }
+}
+
 public enum Tools {
     public static func name(_ id: String) -> String {
         switch id {

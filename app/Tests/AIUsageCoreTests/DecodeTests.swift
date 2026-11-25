@@ -112,4 +112,30 @@ final class DecodeTests: XCTestCase {
         XCTAssertEqual(Version.display("20261114.2.0"), "20261114.2")
         XCTAssertEqual(Tools.name("foo"), "Foo")
     }
+    func testCodexPricing() {
+        let publicPrice = CodexPricing(dollarsPerCredit: nil)
+        XCTAssertEqual(publicPrice.cost(apiCost: 10), 10)
+        XCTAssertEqual(CodexPricing.credits(apiCost: 10), 250, accuracy: 1e-9)
+        // $0.04 a credit is the public API price.
+        XCTAssertEqual(CodexPricing(dollarsPerCredit: 0.04).cost(apiCost: 10), 10, accuracy: 1e-9)
+        XCTAssertEqual(CodexPricing(dollarsPerCredit: 0.02).cost(apiCost: 10), 5, accuracy: 1e-9)
+
+        let costs = ["2026-11-25": ["codex": 8.0, "claude": 20.0], "2026-11-24": ["claude": 3.0]]
+        XCTAssertEqual(publicPrice.apply(costs), costs)
+        let internalPrice = CodexPricing(dollarsPerCredit: 0.01).apply(costs)
+        XCTAssertEqual(internalPrice["2026-11-25"]?["codex"] ?? 0, 2, accuracy: 1e-9)
+        XCTAssertEqual(internalPrice["2026-11-25"]?["claude"], 20)
+        XCTAssertEqual(internalPrice["2026-11-24"], ["claude": 3.0])
+    }
+    func testParseRate() {
+        XCTAssertEqual(CodexPricing.parseRate("0.04"), 0.04)
+        XCTAssertEqual(CodexPricing.parseRate(" $0.025 "), 0.025)
+        XCTAssertEqual(CodexPricing.parseRate("$ 0.03"), 0.03)
+        XCTAssertEqual(CodexPricing.parseRate("0,03"), 0.03)
+        XCTAssertEqual(CodexPricing.parseRate(".05"), 0.05)
+        XCTAssertEqual(CodexPricing.parseRate("1"), 1)
+        for bad in ["", "0", "0.0", "-0.04", "abc", "0.04.1", "0.00001", "10", "1e-2", "$", "."] {
+            XCTAssertNil(CodexPricing.parseRate(bad), bad)
+        }
+    }
 }

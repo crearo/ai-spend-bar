@@ -71,7 +71,11 @@ struct PanelView: View {
         .frame(width: 320)
         // Report the content's own height, not the window's, so it can shrink.
         .fixedSize(horizontal: false, vertical: true)
-        .background(FitWindowToContent())
+        .background(PanelWindow(onClose: {
+            // Each open starts fresh: Settings collapsed, no old update-check result.
+            showSettings = false
+            model.clearManualCheckResult()
+        }))
         .onAppear { model.refreshLoginStatus() }
     }
 
@@ -106,7 +110,7 @@ struct PanelView: View {
         let focusKey = selectedDay ?? today
         let focus = week.first { $0.key == focusKey }
         return VStack(alignment: .leading, spacing: 4) {
-            // Hover or click a bar to see that day; defaults to today.
+            // Hover a bar to see that day; defaults to today.
             if let f = focus {
                 Text("\(f.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) · \(money(f.cost))")
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -147,7 +151,6 @@ struct PanelView: View {
                             case .ended: selectedDay = nil
                             }
                         }
-                        .gesture(SpatialTapGesture().onEnded { selectedDay = dayKey(at: $0.location, proxy: proxy, geo: geo) })
                 }
             }
             .frame(height: 100)
@@ -171,7 +174,7 @@ struct PanelView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.title3).foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(needsApproval ? "Tap to approve in Login Items" : "Tap to start after restart")
+                    Text(needsApproval ? "Click to approve in Login Items" : "Click to start after restart")
                         .font(.callout.weight(.semibold))
                     Text(needsApproval
                          ? "macOS needs your OK before it can start at login."
@@ -272,14 +275,23 @@ struct PanelView: View {
     }
 }
 
-/// MenuBarExtra's window grows when the panel gets taller but never shrinks back, so closing
-/// Settings left the content floating in a too-tall window. This sits behind the panel, takes
-/// the content's size, and resizes the window to match, keeping its top edge under the menu bar.
-private struct FitWindowToContent: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { SizeView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+/// Sits behind the panel and looks after its MenuBarExtra window:
+/// - The window grows when the panel gets taller but never shrinks back, so closing Settings left
+///   the content floating in a too-tall window. This takes the content's size and resizes the
+///   window to match, keeping its top edge under the menu bar.
+/// - The panel's view stays alive between opens, so `onClose` runs when the window is dismissed
+///   (it closes as soon as it stops being the key window).
+private struct PanelWindow: NSViewRepresentable {
+    let onClose: () -> Void
+
+    func makeNSView(context: Context) -> SizeView { SizeView() }
+    func updateNSView(_ nsView: SizeView, context: Context) { nsView.onClose = onClose }
 
     final class SizeView: NSView {
+        var onClose: (() -> Void)?
+        private var resignObserver: NSObjectProtocol?
+
+        deinit { if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) } }
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             fitWindow()
@@ -287,6 +299,11 @@ private struct FitWindowToContent: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+            resignObserver = window.map {
+                NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: $0,
+                                                       queue: .main) { [weak self] _ in self?.onClose?() }
+            }
             fitWindow()
         }
 

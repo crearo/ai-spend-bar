@@ -303,6 +303,12 @@ final class UsageModel: ObservableObject {
         }
     }
 
+    /// Drops a finished manual check's result so it doesn't linger for days. A check still
+    /// running keeps going and shows its result next time.
+    func clearManualCheckResult() {
+        if manualCheck != .checking { manualCheck = .idle }
+    }
+
     // MARK: Updating
 
     /// Automatic updates: quietly run the same installer people used to install the app.

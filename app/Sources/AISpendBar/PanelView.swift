@@ -69,6 +69,9 @@ struct PanelView: View {
         }
         .padding(14)
         .frame(width: 320)
+        // Report the content's own height, not the window's, so it can shrink.
+        .fixedSize(horizontal: false, vertical: true)
+        .background(FitWindowToContent())
         .onAppear { model.refreshLoginStatus() }
     }
 
@@ -266,5 +269,37 @@ struct PanelView: View {
         if s < 3600 { return "\(s / 60)m ago" }
         if s < 86_400 { return "\(s / 3600)h ago" }
         return "\(s / 86_400)d ago"
+    }
+}
+
+/// MenuBarExtra's window grows when the panel gets taller but never shrinks back, so closing
+/// Settings left the content floating in a too-tall window. This sits behind the panel, takes
+/// the content's size, and resizes the window to match, keeping its top edge under the menu bar.
+private struct FitWindowToContent: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { SizeView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class SizeView: NSView {
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            fitWindow()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            fitWindow()
+        }
+
+        private func fitWindow() {
+            // Defer: resizing the window during SwiftUI's layout pass would re-enter it.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window, self.bounds.height > 0 else { return }
+                let target = window.frameRect(forContentRect: NSRect(origin: .zero, size: self.bounds.size))
+                let frame = window.frame
+                guard abs(frame.height - target.height) > 0.5 else { return }
+                window.setFrame(NSRect(x: frame.minX, y: frame.maxY - target.height,
+                                       width: frame.width, height: target.height), display: true)
+            }
+        }
     }
 }
